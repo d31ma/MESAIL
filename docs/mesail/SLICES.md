@@ -3191,7 +3191,7 @@ tested restore.
   Mesail fills it in about 11 months without a retention rule. So if the
   user chooses retention, K32 must run in production before month 7. With
   folders (not a VM disk file), freed space returns to the pool and the
-  hourly copies hold only changed files.
+  hourly copies send only changed files (PLAT-19 measures it).
 - **Runbook:** OPERATIONS.md section 7 (a draft since 2026-11-21) has
   where the data lives, the backups, how to stop every writer, the restore
   of a whole collection, of one document (`fylo restore-doc`) and of a
@@ -3300,8 +3300,10 @@ Release blockers:
   disks, or the blobs (attachments and raw mail) outside ATLAS. Decide with
   PLAT-19's numbers, and check the choice again with the first production
   month's real numbers. With retention, K32 runs before month 7.
-- **ATLAS SSD read errors (2026-11-17):** disk replaced, confirmation
-  pending from Platform.
+- **ATLAS SSD read errors (2026-11-17):** disk replaced (the user: "was
+  replaced"), confirmation pending from Platform (SMART serial and
+  power-on hours, btrfs device stats). A release blocker only until
+  Platform confirms.
 - **K33:** blackbox flow tests for TOTP sign-in, mail out through the
   SMTP edge, notify, devicebox, realtime and the scheduled jobs pass (or
   each failure is a reported bug) before the coordinated release.

@@ -405,7 +405,7 @@ If a check fails, Platform puts back the data kept before the restore.
 
 ### 7.7 Known risks
 - ATLAS SSD read errors (2026-11-17): disk replaced, confirmation pending
-  from Platform.
+  from Platform (SMART serial and power-on hours, btrfs device stats).
 - The `async` export can lose the last seconds of writes (7.2).
 - The HAVEN copy reaches HAVEN's limits in about 20 months without a
   retention rule (PLAT-19).
