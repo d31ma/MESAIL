@@ -221,7 +221,8 @@ Decisions:
   the user: "FYLO folders on ATLAS (Rec.)"; the owner's decision of
   2026-11-10 was "Keep it on ATLAS", as ext4 inside a VM disk file on
   ATLAS, the FitNest pattern). In production on kestrel each FYLO root is
-  a folder directly on the ATLAS NFS share (from CITADEL), mounted into the
+  a folder directly on ATLAS, in a Mesail-only area (its own subvolume and
+  NFS export from CITADEL; the user: "Mesail-only area (Rec.)"), mounted into the
   function as its `/mnt/data`, with no VM disk file in between. FYLO opens
   it as a **network root with leases** (FYLO's next release; until then
   FYLO refuses a native root on a network share with `EREMOTEROOT`, so

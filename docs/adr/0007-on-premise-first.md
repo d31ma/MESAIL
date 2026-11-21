@@ -10,8 +10,9 @@
   rest of ADR 0004, and ADRs 0005 and 0006, stay.
 - Amended 2026-11-21 (section 5 table rows "EFS" and "S3 for blobs",
   section 7): Mesail's production data (FYLO roots and the blob folder)
-  are folders on the ATLAS NFS share, not a data disk inside the VM (the
-  user: "FYLO folders on ATLAS (Rec.)"). Keycloak's SQLite file is not
+  are folders in a Mesail-only area on ATLAS (its own subvolume and NFS
+  export, the user: "Mesail-only area (Rec.)"), not a data disk inside
+  the VM (the user: "FYLO folders on ATLAS (Rec.)"). Keycloak's SQLite file is not
   put on the share (OPERATIONS.md section 7).
 - Spec: [SPEC.md](../mesail/SPEC.md) AC-OP-4 to AC-OP-8. Slices:
   [SLICES.md](../mesail/SLICES.md) "Wave 5: on-premise".
@@ -148,7 +149,7 @@ An audit of `develop` (2cda510) found:
    | EventBridge schedules | the local scheduler (already) |
    | S3 for blobs | one shared blob folder with the local adapter (decided 2026-11-11, section 7); in production a folder on the ATLAS NFS share (2026-11-21) |
    | S3 plus CloudFront for web apps | the router serves the web bundles from Floci's S3 bucket (as now) |
-   | EFS | each FYLO-owning function's `/mnt/data` is a folder on the ATLAS NFS share, opened by FYLO as a network root with leases (amended 2026-11-21, the user: "FYLO folders on ATLAS (Rec.)"; ADR 0004 section 4). The dev host keeps Floci's EFS volumes on its ext4 data disk on HANGAR; tests never use ATLAS |
+   | EFS | each FYLO-owning function's `/mnt/data` is a folder in the Mesail-only area on ATLAS (its own subvolume and NFS export), opened by FYLO as a network root with leases (amended 2026-11-21, the user: "FYLO folders on ATLAS (Rec.)"; ADR 0004 section 4). The dev host keeps Floci's EFS volumes on its ext4 data disk on HANGAR; tests never use ATLAS |
    | Secrets Manager | secret files on the host, read once at start (as now) |
    | SES (in and out) | `edge/smtp` for inbound; the operator's relay or direct delivery outbound |
    | Public DNS default | the operator's resolver |

@@ -3265,6 +3265,28 @@ MESAIL Build Coordinator's notes.
 - **Done when:** the six flows have tests on `develop`, and they pass or
   each failure is a reported bug.
 
+### K34. SMTP sink for outside mail in the Floci test stack (release blocker, about 3-4 hours)
+In the Floci stack `mail-out` has no relay (`relayaddress: ""`) and the
+SMTP edge is inbound only, so mail to an outside address can only reach
+`deferred`, and K33 cannot prove "email out" or a bounce reported back.
+- **Sink:** a small Go SMTP server built from this repository (no
+  third-party image), as a `Dockerfile` target on the same pinned base as
+  the SMTP edge, in the Floci TEST stack only (its own compose file, never
+  in a production deploy). It accepts mail, keeps each message for the
+  test to read (a read-only HTTP listing on the backend network, or files
+  in the run's log folder), and answers `550 5.1.1` for one chosen local
+  part, so a bounce can be tested.
+- **Stack:** in the test stack only, `mailout.relayaddress` points at the
+  sink, and the sink's host is added to the outgoing hosts allow list.
+  The run passes `MESAIL_RELAY_SINK_ADDR` to the blackbox tests.
+- **Tests** (in `tests/blackbox`, gated by `MESAIL_RELAY_SINK_ADDR`):
+  `TestFlowMailOutToAnOutsideAddressIsDelivered` (the sink gets the
+  message, signed with the domain's DKIM key, and the status becomes
+  `sent`) and `TestFlowMailOutRefusedByTheRelayIsReportedBack` (the 550
+  address gives `bounced` on the sender's message).
+- **Done when:** both tests pass on the dev host's Floci stack, and no
+  production file names the sink.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3300,10 +3322,15 @@ Release blockers:
   disks, or the blobs (attachments and raw mail) outside ATLAS. Decide with
   PLAT-19's numbers, and check the choice again with the first production
   month's real numbers. With retention, K32 runs before month 7.
-- **ATLAS SSD read errors (2026-11-17):** disk replaced (the user: "was
-  replaced"), confirmation pending from Platform (SMART serial and
-  power-on hours, btrfs device stats). A release blocker only until
-  Platform confirms.
+- **Mesail-only area on ATLAS:** the user chose "Mesail-only area
+  (Rec.)" (2026-11-21). Platform's CITADEL changes (the subvolume
+  `/mnt/atlas-pool/MESAIL`, the NFS export `mesail` and the hourly copy to
+  HAVEN) need the user's yes before go-live; Platform does them (PLAT-19).
+- **One-document restore:** the FYLO release Mesail ships with has `fylo
+  restore-doc` (FYLO slice L1-10), or the whole-collection restore
+  (OPERATIONS.md section 7.4) is accepted through the hub.
+- **K34:** mail out to an outside address is proven against an SMTP sink
+  in the Floci test stack (the release smoke test needs "email out").
 - **K33:** blackbox flow tests for TOTP sign-in, mail out through the
   SMTP edge, notify, devicebox, realtime and the scheduled jobs pass (or
   each failure is a reported bug) before the coordinated release.

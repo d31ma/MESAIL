@@ -309,8 +309,8 @@ backup plan (`plat-atlas-backup-plan.md` in the hub's notes), and
 
 | Data | Place | Notes |
 | --- | --- | --- |
-| FYLO roots | one folder per service (and domain) on the ATLAS NFS share, mounted as the function's `/mnt/data` | FYLO network roots with leases (FYLO's next release) |
-| Files (attachments, backups, raw mail) | the blob folder on the same share | plain files named by `blobKey` and `rawBlobKey`; not FYLO file records |
+| FYLO roots | one folder per service (and domain) in the Mesail-only area on ATLAS (subvolume `/mnt/atlas-pool/MESAIL`, NFS export `mesail`), mounted as the function's `/mnt/data` | FYLO network roots with leases (FYLO's next release) |
+| Files (attachments, backups, raw mail) | the blob folder in the same Mesail-only area | plain files named by `blobKey` and `rawBlobKey`; not FYLO file records |
 | Keycloak | the SQLite file in `MESAIL_KEYCLOAK_DATA`, on the VM's own disk | SQLite does not support network file systems. A copy made with `sqlite3 <file> ".backup <copy>"` is written into the shared folder before each snapshot, so the snapshot holds a consistent copy |
 | Secrets | the host's secret files | their own backup, kept apart from the data |
 
@@ -318,8 +318,10 @@ Development and tests never touch ATLAS (the dev host's data disk and
 the FYLO test image are on HANGAR).
 
 ### 7.2 Backups (Platform)
-- Every hour Platform takes a read-only btrfs snapshot of Mesail's ATLAS
-  subvolume and sends it incrementally to the HAVEN pool. All history is on
+- The user chose a Mesail-only area on ATLAS (2026-11-21: "Mesail-only
+  area (Rec.)"): its own subvolume and NFS export, holding only Mesail's
+  live data. Every hour Platform takes a read-only btrfs snapshot of it and
+  sends it incrementally to the HAVEN pool. All history is on
   HAVEN: hourly copies kept 24 hours, daily copies 30 days, manual copies 7
   days. ATLAS keeps only the live data and one send base.
 - No pause and no `fylo pack`: FYLO treats an atomic snapshot like a power
@@ -355,10 +357,22 @@ one of them before it goes in this runbook.
 - **A whole root, namespace or collection:** Platform restores it from one
   snapshot (PLAT-19 section 7 A or B: the damaged data is kept as a
   snapshot first). Never copy part of a collection by hand.
-- **One document:** `fylo restore-doc`, reading from a read-only mount of
-  the snapshot; it writes the document as a new version through the engine.
-  Never copy a document's files by hand: that skips the version history,
-  the indexes and the lease checks (layout spec 20.6).
+- **One document, with `fylo restore-doc`** (FYLO slice L1-10, asked
+  for FYLO's next release): find it in a HAVEN copy
+  (`plat-atlas-restore find`), stage that collection to a scratch folder on
+  HANGAR (`plat-atlas-restore stage`), stop every writer (7.3), restore its
+  blob first if it names one, then `fylo restore-doc --from <scratch
+  folder> --root <live root> --namespace <namespace> --collection
+  <collection> --id <TTID>`. It writes the document as a new version
+  through the engine (one history entry, updated indexes, the lease
+  checks). Never copy a document's files by hand: that skips the version
+  history, the indexes and the lease checks (layout spec 20.6).
+- **One document, until `restore-doc` ships:** restore the document's
+  whole collection, with the root's `.fylo/` folder, from ONE snapshot,
+  with every writer stopped (Platform's whole-collection restore), and its
+  blobs by plain file copy from the SAME snapshot. Every later change in
+  that collection is lost, so take a manual snapshot first and tell the
+  domain's admins.
 - **Documents that name a file** (`attachments/attachments` `blobKey`,
   `attachments/backups`, `mail-in/inbound-raw` and
   `mail-out/outbound-queue` `rawBlobKey`): restore the file and the
@@ -401,14 +415,21 @@ If a check fails, Platform puts back the data kept before the restore.
 - Space: at about 10 people (about 12 GB a month) ATLAS is full in about
   11 months without retention. If the user chooses retention, K32 runs in
   production before month 7.
-- K33's flow tests pass (SLICES K33).
+- K33's flow tests pass, and K34 proves mail out to an outside address
+  (SLICES K33 and K34).
+- The FYLO release Mesail ships with has `fylo restore-doc`, or the
+  whole-collection path of 7.4 is accepted for one-document restores
+  (through the hub).
+- Platform's CITADEL changes for the Mesail-only area (the subvolume, the
+  NFS export and the hourly copy job) are done, with the user's yes.
 
 ### 7.7 Known risks
-- ATLAS SSD read errors (2026-11-17): disk replaced, confirmation pending
-  from Platform (SMART serial and power-on hours, btrfs device stats).
 - The `async` export can lose the last seconds of writes (7.2).
 - The HAVEN copy reaches HAVEN's limits in about 20 months without a
   retention rule (PLAT-19).
+- History: the ATLAS SSD with read errors was replaced and verified on
+  2026-11-17 (btrfs replace, clean scrubs, error counters 0); no SMART
+  data through the USB bridge.
 
 ## 8. Checks
 
