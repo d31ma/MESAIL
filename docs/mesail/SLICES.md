@@ -3305,7 +3305,8 @@ from running workers at all.
   release's docs).
 - **Builds:** each Lambda app's `application-lambda.json` (the `lambda`
   profile; add the file where it is missing) sets `"server": {"workers":
-  false}`. Then remove `kit/scheduling` (and its line in `kit.list`), the
+  false}`. Then remove `kit/scheduling` (and its `scheduling` line in each
+  app's `server/packages/kit.list`, with the copied package), the
   workers' wrapper in every app, and `tests/workers/`. `realtime`
   (`container` profile) and native runs keep their workers.
 - **Writers to stop** (OPERATIONS.md section 7.3) do not change: the
