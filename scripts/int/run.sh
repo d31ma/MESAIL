@@ -335,7 +335,7 @@ floci_steps() {
   wanted_step floci || return 0
   run_step floci "MESAIL_IMAGE_TAG=$(image_tag) MESAIL_TEST_RUN='${FLOCI_TESTS:-}' scripts/int/floci.sh (after run-all.sh --bundle-only)" floci_stack
   local code=$?
-  if [ "$KEEP_STACK" = 1 ]; then echo "=== the stack and its :$(image_tag) images are kept (--keep-stack)"; return "$code"; fi
+  if [ "$KEEP_STACK" = 1 ] && [ "$code" = 0 ]; then echo "=== the stack and its :$(image_tag) images are kept (--keep-stack)"; return "$code"; fi
   run_step floci-images "docker rmi <every :$(image_tag) image>" remove_own_images
   return "$code"
 }
