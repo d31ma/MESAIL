@@ -48,12 +48,30 @@ save_logs() {
 
 stop_stack() {
   local code="$1"
-  if [ "${MESAIL_INT_KEEP_STACK:-0}" = 1 ] && [ "$code" = 0 ]; then echo "the stack is left running (MESAIL_INT_KEEP_STACK=1, run passed); its next user stops it"; return 0; fi
+  if kept_stack "$code"; then echo "the stack is left running (MESAIL_INT_KEEP_STACK=1, run passed); its next user stops it"; return 0; fi
   if [ ! -f "$(mesail_log_dir)/compose-profile" ]; then echo "the stack was not started"; return 0; fi
   MESAIL_BLOBS_VOLUME="$(cat "$(mesail_log_dir)/blobs-volume" 2> /dev/null || true)"
   export MESAIL_BLOBS_VOLUME
   # shellcheck disable=SC2046
   docker compose --project-directory "$(mesail_root)" $(stack_profile) stop
+}
+
+kept_stack() {
+  [ "${MESAIL_INT_KEEP_STACK:-0}" = 1 ] && [ "$1" = 0 ]
+}
+
+write_handover() {
+  {
+    echo "Kept Floci stack of $(basename "$(dirname "$(mesail_log_dir)")") (MSL-INT), for the next tester on the dev host"
+    echo "Mesail commit: $(git -C "$(mesail_root)" rev-parse HEAD)"
+    echo "run log folder: $(mesail_log_dir)"
+    echo "MESAIL_IMAGE_TAG=$MESAIL_IMAGE_TAG"
+    echo "MESAIL_ROUTER_URL=$MESAIL_ROUTER_URL"
+    echo "MESAIL_SECRETS_FILE=$MESAIL_SECRETS_FILE (mode 600; read only, never copy or log; MSL-INT removes it)"
+    echo "compose project: mesail; stop it with: eval \"\$(mesail-devhost env)\"; docker compose -p mesail stop"
+    echo "compose files used: $(stack_profile)"
+  } > "$(mesail_log_dir)/handover.txt"
+  cat "$(mesail_log_dir)/handover.txt"
 }
 
 left_behind() {
@@ -69,7 +87,8 @@ finish() {
   mesail_step save-logs save_logs || true
   mesail_step compose-stop stop_stack "$code" || code=1
   mesail_step left-behind left_behind || true
-  if [ -n "${MESAIL_SECRETS_FILE:-}" ]; then rm -f "$MESAIL_SECRETS_FILE"; fi
+  if kept_stack "$code"; then mesail_step handover write_handover || true; fi
+  if [ -n "${MESAIL_SECRETS_FILE:-}" ] && ! kept_stack "$code"; then rm -f "$MESAIL_SECRETS_FILE"; fi
   echo "=== int floci rc=$code (logs in $(mesail_log_dir))"
   exit "$code"
 }
