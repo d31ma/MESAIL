@@ -477,6 +477,7 @@ write_summary() {
     echo "# MSL-INT $RUN_ID: $(run_result)"
     echo "Started $STARTED_AT, ended $(date '+%Y-%m-%d %H:%M:%S %Z'). Steps asked: $RUN_STEPS."
     shas_section
+    echo "- settings: FYLO_ALLOW_SYSTEM_DISK=${FYLO_ALLOW_SYSTEM_DISK:-unset}"
     echo "## Machine at start"
     echo "$MACHINE_AT_START"
     steps_table
