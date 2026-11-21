@@ -3129,6 +3129,15 @@ as its SDK-9, and removes the old operations only after K30 and TAC-FY2
 pass on a FYLO `develop` build.
 - **Blocked until** FYLO's SDK-3 is on FYLO `develop` (take the exact
   request and answer shapes from there).
+- **Deadline:** before FYLO's SDK-10, which removes the old operations
+  (from FYLO's DB-2 the handshake reports `protocolVersion` 2 with
+  `capabilities.store` 1, and the old operations keep working until
+  SDK-10; the date is asked of the FYLO Build Coordinator).
+- **SQL stays:** FYLO SQL v1 (ADR 0035 Amendment 2, FYLO develop 7a07a33,
+  in DB-2) keeps devicebox's six statement shapes (dotted paths, a bound
+  `LIMIT`, `TRUE`/`FALSE`/`NULL`, `SELECT *`) and `EXPLAIN`; FYLO's SDK-4
+  runs them as regression tests. So in `Cost_test.go` only the `getLatest`
+  call moves to the Store; the `EXPLAIN` check stays.
 - **Branch rule (TACHYON's rule):** Mesail pins FYLO 26.45.07
   (`Dockerfile`, `tools.lock`, `install-tools.sh` and the default paths),
   where the Store operations do not exist. So K30 lives on its own branch
@@ -3398,6 +3407,42 @@ checks every recipient at RCPT; the hand-off checks none.
   passes on the dev host's Floci stack, and the other K33 mail tests still
   pass.
 
+### K37. mail-out and notify stay within 25 writes per call (release blocker, about 2 hours)
+Found by the write-rate study for FYLO on ATLAS (2026-11-21,
+`fylo-write-rates-atlas.md` in the MESAIL Build Coordinator's notes). On
+ATLAS a FYLO commit takes about 228 ms (p95 377 ms, FYLO-L1-3), so rule 9
+(at most 25 writes and 20 s per call) matters.
+- **mail-out deliver** (`kit/mailout` `QueueRun`, `Batch: 50`) has no
+  write or time cap: about 4 writes per item, so up to about 200 writes per
+  call, about 46-75 s of commits on ATLAS, past the 60 s function timeout.
+  It stops starting new items at 25 writes or 20 s and answers `more:
+  true`, as the outbox sweeps do.
+- **notify's message.created call** writes about 26 for 22 readers (20
+  notifications inline plus the thread record, seen row and spill). It
+  stays within 25 (spill earlier).
+- **Done when:** tests show a deliver call with 50 due items stops at the
+  cap with `more: true` and the next call continues; a 22-reader message
+  stays within 25 writes in one call; the K33 flow tests still pass.
+
+### K38. One FYLO transaction per action (backlog; release blocker if the go-live check says so)
+Every Mesail write is one FYLO commit today (Mesail's data source has
+only single-document calls). On ATLAS a plain chat send costs about 1.6 s
+(7 commits; p95 2.6 s), a send at the 25-write budget about 5.7 s (p95
+9.4 s), and a read waits behind a running 20-26 write event call for about
+5-10 s. The rate fits at about 10 people (messaging about 60% of 4 commits
+per second at peak; devicebox about 90% after Wave 9).
+- **Blocked until** TACHYON's data source exposes FYLO Store transactions
+  (up to 1,000 writes), and FYLO says how a transaction of N writes costs
+  on ATLAS (about one commit, or about N).
+- **Builds:** one transaction for each of: a messaging send with its
+  drain, notify's fan-out, notify's mark-read patches, a devicebox put
+  (this also ends the box counts that can drift without a transaction,
+  DOMAIN.md), and mail-in's accept. Writes and outbox rows stay
+  idempotent.
+- **Done when:** on the ATLAS production host, a plain send's p95 is
+  under the go-live limit (OPERATIONS.md section 7.6), and the write-cost
+  tests show one transaction per action.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3442,6 +3487,10 @@ Release blockers:
 - **One-document restore:** the FYLO release Mesail ships with has `fylo
   restore-doc` (FYLO slice L1-10), or the whole-collection restore
   (OPERATIONS.md section 7.4) is accepted through the hub.
+- **K37:** mail-out's deliver job and notify's fan-out stay within 25
+  writes per call.
+- **Write speed on ATLAS:** OPERATIONS.md section 7.6's measurement; K38
+  (one FYLO transaction per action) becomes a blocker if it fails.
 - **K36:** a hand-off to an unknown mailbox in another hosted domain is
   reported `bounced`, not `sent` (found by K33).
 - **K34:** done (develop 9f5f6bb4): mail out to an outside address is

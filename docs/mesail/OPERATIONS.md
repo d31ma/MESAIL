@@ -438,6 +438,12 @@ If a check fails, Platform puts back the data kept before the restore.
   production before month 7.
 - K33's flow tests pass, and K34 proves mail out to an outside address
   (SLICES K33 and K34).
+- Write speed on the ATLAS folders (FYLO-L1-3 measured a commit at about
+  228 ms, p95 377 ms): on the production host, measure the commit p50 and
+  p95 and run a 10-person load (sends, mark-reads, email in and out). If a
+  plain chat send's p95 is over 3 s, or a root is over 70% of its commit
+  rate at peak, SLICES K38 (one FYLO transaction per action) is done
+  before go-live. K37 (at most 25 writes per call) is done in any case.
 - The FYLO release Mesail ships with has `fylo restore-doc`, or the
   whole-collection path of 7.4 is accepted for one-document restores
   (through the hub).
