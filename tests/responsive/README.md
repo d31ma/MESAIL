@@ -38,6 +38,8 @@ Settings (environment variables):
 | `MESAIL_DIST` | `../../apps/web/dist/web` (`../../apps/web-admin/dist/web` with `MESAIL_APP=web-admin`) | The built `dist/web` folder to serve. |
 | `MESAIL_CHROME` | newest Playwright Chromium | The Chrome or Chromium binary. |
 | `PLAYWRIGHT_BROWSERS_PATH` | `~/Library/Caches/ms-playwright` | Where to look for `chromium-*`, then `chromium_headless_shell-*`. |
+| `MESAIL_COLOR_SCHEME` | `light` | The colour scheme (`light` or `dark`) for every visit whose test sets no `prefers-color-scheme` itself. Before 2026-11-21 the suite set none, so on a Mac in dark mode its "light" runs were really dark (MSL-DT3, K26 part 3). The dark-mode tests always run dark. |
+| `MESAIL_MENU_TESTS` | unset | `1` runs `TestClosedMenus` and `TestMenuKeyboard` (`Menus_test.go`, from MSL-DT3/DT4): closed `w-menu` items are not exposed and Tab never lands in them, at 320, 375, 768 and 1280 px; Space opens a menu with focus on an item, ArrowDown stays in it, Escape and Shift+Tab close it and focus its button, Tab closes it and moves on. Off in the gates until Mesail pins a DuVay release with DUVAY-11 and DUVAY-12; `scripts/int/run.sh` runs them. |
 
 The test copies `MESAIL_DIST` to a temporary folder when it starts and
 serves the copy, so a rebuild during the run does not change what it tests.

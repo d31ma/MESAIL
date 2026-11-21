@@ -484,6 +484,7 @@ shared_gates() {
   run_step "go cache probe" "$folder/go-cache.log" "$root/scripts/go-cache_test.sh" || status=1
   run_step "fylo image attach" "$folder/fylo-image.log" "$root/scripts/fylo-image_test.sh" || status=1
   run_step "floci capture before retry" "$folder/floci-capture.log" "$root/scripts/floci/capture_test.sh" || status=1
+  run_step "integration harness" "$folder/int-harness.log" "$root/scripts/int/run_test.sh" || status=1
   module_gates "$root" "$folder" || status=1
   return "$status"
 }
