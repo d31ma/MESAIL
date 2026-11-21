@@ -314,8 +314,8 @@ backup plan (`plat-atlas-backup-plan.md` in the hub's notes), and
 
 | Data | Place | Notes |
 | --- | --- | --- |
-| FYLO roots | one folder per service (and domain) in the Mesail-only area on ATLAS (subvolume `/mnt/atlas-pool/MESAIL`, NFS export `mesail`), mounted as the function's `/mnt/data` | FYLO network roots with leases (FYLO's next release) |
-| Files (attachments, backups, raw mail) | the blob folder in the same Mesail-only area | plain files named by `blobKey` and `rawBlobKey`; not FYLO file records |
+| FYLO roots | one folder per app DIRECTLY below the Mesail-only area's own mount: `/Volumes/MESAIL/<app>` (subvolume `/mnt/atlas-pool/MESAIL` beside ATLAS, NFS export `mesail`, fsid 113; the production VM has its own mount line); the function sees it as its `/mnt/data` | FYLO network roots with leases (FYLO's next release). FYLO refuses a root that is not directly below a mount (`ENOTVOLUMEROOT`), so never `/Volumes/ATLAS/Mesail/<app>` |
+| Files (attachments, backups, raw mail) | the blob folder in the same Mesail-only area (`/Volumes/MESAIL/blobs`) | plain files named by `blobKey` and `rawBlobKey`; not FYLO file records |
 | Keycloak | the SQLite file in `MESAIL_KEYCLOAK_DATA`, on the VM's own disk | SQLite does not support network file systems. Every hour a copy goes into `keycloak/keycloak-backup.sqlite` in the Mesail-only area (7.2), so Keycloak's restore point is never older than one hour |
 | Secrets | the host's secret files | their own backup, kept apart from the data |
 
@@ -444,9 +444,11 @@ If a check fails, Platform puts back the data kept before the restore.
   plain chat send's p95 is over 3 s, or a root is over 70% of its commit
   rate at peak, or a read's p95 while events apply is over 5 s, SLICES K38
   (one FYLO transaction per collection per action) is done before go-live
-  for the bursts; a slow plain send also needs FYLO's cost per commit
-  (K38 saves only one commit there). K37 (at most 25 writes per call) is
-  done in any case.
+  for the bursts. A slow plain send depends on FYLO-PERF1's cost per commit
+  (K38 saves only one commit there): PERF1's table decides whether Mesail
+  also needs a "fewer collections per send" slice, and whether
+  transactions across collections come back to the user. K37 (at most 25
+  writes per call) is done in any case.
 - The FYLO release Mesail ships with has `fylo restore-doc`, or the
   whole-collection path of 7.4 is accepted for one-document restores
   (through the hub).

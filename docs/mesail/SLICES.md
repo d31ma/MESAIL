@@ -3470,15 +3470,22 @@ Coordinator's notes).
   5, 25 and 100 writes on ANVIL's NFS mount; plan K38 from that table, not
   from the target. If a transaction costs about N commits, K38 brings
   little and stays backlog.
-- **Cost per commit:** FYLO plans to cut it in its next release
-  (FYLO-PERF1 measures where an ATLAS commit's 228 ms go and cuts the
-  network round trips per commit). So "fewer collections per send" (for
-  example the sender's read position inside the conversation document) is
-  not a slice yet: it becomes one only if OPERATIONS.md section 7.6 still
-  finds a plain send's p95 over 3 s with FYLO's next release.
-- **Across collections:** the user decided "One-collection only"; FYLO
-  takes Mesail's case (an action that writes a few collections) back to
-  the hub as a question. Until an answer, K38 is designed per collection.
+- **Cost per commit:** FYLO plans to cut it in its next release.
+  FYLO-PERF1 measures where an ATLAS commit's 228 ms go (each fsync,
+  rename, folder sync, lease, index and log write) and cuts the network
+  round trips per commit; its target, not a promise, is a plain commit at
+  about 100 ms p50 or less. PERF1's before/after table (p50 and p95, a
+  single put and a 25-write transaction) decides (a) whether a slow plain
+  send needs Mesail's "fewer collections per send" slice (for example the
+  sender's read position inside the conversation document) and (b) whether
+  transactions across collections come back as a question. Until that
+  table, no collection redesign.
+- **Across collections:** the user decided "Decide after measuring
+  (Rec.)" (2026-11-21, after "One-collection only" earlier): transactions
+  stay one-collection; FYLO's SDK-3 and FYLO-PERF1 measure first, then the
+  user chooses with real numbers (FYLO's question Q-TXN2: one transaction
+  across several collections of one namespace, which would make a send
+  one commit). K38 is designed per collection.
 - **Rule for every action:** group the writes per collection into one
   transaction. Write the derived and helper documents first, and the
   document that carries the staged outbox events (or, for an event
@@ -3540,6 +3547,31 @@ deadline` at Mac load 37, with no store failure, and passed alone at load
   `mac-heavy` job while other gates run (load over 30), and it still fails
   when coalescing is turned off by hand (one check, not committed).
 
+### K40. FYLO roots directly below a mount, test slices as namespaces (backlog, blocked until a FYLO build with L1-5; FYLO calls it Mesail's L1-13 work)
+FYLO's batch B adds a rule (2026-11-21): a root must be a folder DIRECTLY
+below a mount point (`<mount>/<app>`); any other root gets
+`ENOTVOLUMEROOT` unless `FYLO_ALLOW_SYSTEM_DISK=1`. The rule ships OFF
+until FYLO's L1-5 (namespaces), so K30 on DB-2 works with today's layout;
+this slice moves Mesail to the new layout with DB-1.
+- **Test slices become FYLO namespaces** (the user's earlier decision:
+  "for testing we can use namespaces feature for the slices"): app roots
+  at `<image mount>/<app>` with the namespace `slice-<id>`, not folders
+  `<image mount>/slice-<id>/<app>`. Changes `scripts/gates.sh` (the `.env`
+  it writes and K30's root check), `scripts/native/run-all.sh`
+  (`<owner>/native/<service>` becomes namespaces too), the nightly, and
+  the docs that name the old paths. Take the namespace setting from the
+  FYLO and TACHYON releases Mesail pins.
+- **Dev host:** `/mnt/data/<service>` is already a folder directly below
+  the function's mount; no change.
+- **Production:** `/Volumes/MESAIL/<app>` (ADR 0004 section 4, OPERATIONS.md
+  section 7.1), never `/Volumes/ATLAS/Mesail/<app>`, which FYLO refuses.
+- **`FYLO_ALLOW_SYSTEM_DISK`** is not needed with this layout: remove it
+  wherever it is still set.
+- **Done when:** with the rule ON (a FYLO build with L1-5), `gates.sh
+  --all`, the native run, the nightly and the Floci stack pass; parallel
+  slices write only their own namespace; and `git grep` finds no
+  `slice-<id>/<app>` path and no `FYLO_ALLOW_SYSTEM_DISK`.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3559,7 +3591,8 @@ Release blockers:
   release with TAC-WK1.
 - **FYLO roots on ATLAS** (the user, 2026-11-21: "Mesail production data
   will live on ATLAS", then "FYLO folders on ATLAS (Rec.)"; ADR 0004 and
-  ADR 0007 amended): each root is a folder on the ATLAS NFS share, which
+  ADR 0007 amended): each root is a folder directly below the Mesail-only
+  area's own mount (`/Volumes/MESAIL/<app>`, K40), which
   needs FYLO's next release (network roots with leases) and Mesail's pin
   bump with K30. Until then FYLO refuses a native root there
   (EREMOTEROOT).
@@ -3579,8 +3612,12 @@ Release blockers:
   month's real numbers. With retention, K32 runs before month 7.
 - **Mesail-only area on ATLAS:** the user chose "Mesail-only area
   (Rec.)" (2026-11-21). Platform's CITADEL changes (the subvolume
-  `/mnt/atlas-pool/MESAIL`, the NFS export `mesail` and the hourly copy to
-  HAVEN) need the user's yes before go-live; Platform does them (PLAT-19).
+  `/mnt/atlas-pool/MESAIL` beside ATLAS, not inside it; its own NFS export
+  `mesail`, fsid 113; its own mount at `/Volumes/MESAIL` on the production
+  host, and in the production VM its own mount line; the hourly copy to
+  HAVEN) need the user's yes before go-live; Platform does them (PLAT-19,
+  "FYLO root rule" in `plat-19-atlas-backup-changes.md` in the hub's
+  notes).
 - **One-document restore:** the FYLO release Mesail ships with has `fylo
   restore-doc` (FYLO slice L1-10), or the whole-collection restore
   (OPERATIONS.md section 7.4) is accepted through the hub.
