@@ -63,7 +63,7 @@ int_test_checksum_mismatch() {
   int_test_expect_contains "the builds step failed" "| builds | FAIL rc=1 |" "$summary"
   int_test_expect_contains "the failure names the mismatch" "checksum mismatch for $work/ty" "$summary"
   int_test_expect_contains "the summary names the TACHYON commit" "- TACHYON: commit abc123" "$summary"
-  int_test_expect_contains "an uncovered flow is listed as not covered" "| devicebox | not covered (no blackbox test yet) |" "$summary"
+  int_test_expect_contains "an uncovered flow is listed as not covered" "| mail out to an outside address through a relay (K34 sink) | not covered (no blackbox test yet) |" "$summary"
   int_test_expect_contains "a covered flow that did not run is not a pass" "| search | not run |" "$summary"
   int_test_expect_missing "no worktree is made" "$work/trees"
   int_test_expect_missing "no tool copy is left" "$(dirname "$summary")/tools"
