@@ -3124,8 +3124,17 @@ places that speak to `fylo exec` directly change. FYLO tracks this slice
 as its SDK-9, and removes the old operations only after K30 and TAC-FY2
 pass on a FYLO `develop` build.
 - **Blocked until** FYLO's SDK-3 is on FYLO `develop` (take the exact
-  request and answer shapes from there). **Needed before** FYLO's next
-  release, and so before Mesail moves to that release.
+  request and answer shapes from there).
+- **Branch rule (TACHYON's rule):** Mesail pins FYLO 26.45.07
+  (`Dockerfile`, `tools.lock`, `install-tools.sh` and the default paths),
+  where the Store operations do not exist. So K30 lives on its own branch
+  and is tested on FYLO `develop` before the release: against FYLO's DB-1
+  and DB-2 `develop` builds
+  (`~/Developer/AnvilTargets/fylo-builds/<sha>/<platform>/fylo`), the
+  devicebox test through `MESAIL_FYLO`, and one Floci capture run with a
+  locally built image. It merges to Mesail `develop` together with
+  Mesail's FYLO pin bump, right after FYLO's next release, gated with
+  `scripts/gates.sh --all`.
 - **Owns:**
   - `apps/devicebox/server/packages/devicebox/fyloStorage_test.go`: its
     fake storage sends `inspectCollection`, `putData`, `patchDoc`,
@@ -3138,10 +3147,12 @@ pass on a FYLO `develop` build.
     `handshake`; check that both stay in the Store answers.
 - **Not owned:** the old names in history (K12, PHASE2_EVIDENCE.md,
   CHANGELOG.md) stay as written.
-- **Done when:** `git grep -P` for the seven old names finds them only in
-  history; the devicebox test passes on a `fylo` built from FYLO
-  `develop` with SDK-3; `capture_test.sh` passes; and one OP8 capture on
-  the dev host times every step with `ok=true`.
+- **Done when:** before the release, on the branch: `git grep -P` for
+  the seven old names finds them only in history; the devicebox test
+  passes on FYLO's DB-1 and DB-2 `develop` builds; `capture_test.sh`
+  passes; and one OP8 capture on the dev host, with a locally built image,
+  times every step with `ok=true`. After the release: the branch and the
+  pin bump merge together with `--all` green.
 
 ### K31. Production backup and restore of FYLO roots on ATLAS (backlog, with Platform)
 The user keeps CITADEL's fast `async` export for ATLAS (2026-11-21: "keep
@@ -3198,8 +3209,8 @@ Release blockers:
     (c4abfa9b). Left: Mesail's release test on FYLO's frozen release
     commit F; FYLO-R1 builds `fylo` at F and sends its paths and SHA-256
     through the MESAIL Build Coordinator to a Mesail session that runs it;
-    K30 (Store operations only) must be on `develop` before FYLO's
-    next release;
+    K30 (Store operations only) is tested on FYLO `develop` before
+    FYLO's next release, and merged with Mesail's FYLO pin bump after it;
   - TACHYON `develop`: K22 phase 2 on the TAC-ST2 branch, and again on
     `develop` after TAC-ST2 merges;
   - DuVay: DT3 tested d977477 (no new bug); DT4 retests e08ae67 (the
