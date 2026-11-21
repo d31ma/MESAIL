@@ -449,6 +449,18 @@ failure_lines() {
   grep -E -- '^ *--- FAIL|^FAIL|_test\.go:[0-9]+:|rc=[1-9][0-9]*$|timed out|checksum mismatch|did not|not running|^error|ERROR' "$1" | head -60
 }
 
+gate_log_folder() {
+  sed -n 's/^gates: logs in //p' "$1" | head -1
+}
+
+storage_failures() {
+  local folder
+  folder="$(gate_log_folder "$1")"
+  [ -n "$folder" ] || return 0
+  echo "gates' own logs: $folder"
+  grep -c '"event":"handler.storage_failed"' "$folder"/*.log 2> /dev/null | grep -v ':0$' | sed 's/^/store calls that failed (handler.storage_failed): /'
+}
+
 failure_section() {
   local name code log command
   echo "## Failures"
@@ -458,6 +470,7 @@ failure_section() {
     echo "Reproduce in a worktree of the Mesail commit above, with the same builds: \`$command\`"
     echo '```'
     failure_lines "$log"
+    storage_failures "$log"
     echo '```'
   done < "$STEPS_FILE"
 }
