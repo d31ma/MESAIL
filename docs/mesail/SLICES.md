@@ -3132,7 +3132,11 @@ pass on a FYLO `develop` build.
 - **Deadline:** before FYLO's SDK-10, which removes the old operations
   (from FYLO's DB-2 the handshake reports `protocolVersion` 2 with
   `capabilities.store` 1, and the old operations keep working until
-  SDK-10; the date is asked of the FYLO Build Coordinator).
+  SDK-10). FYLO's answer (2026-11-21): SDK-10 is the LAST FYLO slice
+  before its release candidate, and its gate is TACHYON's TAC-FY2 and
+  this K30 branch both passing against DB-2 (about 10-15 hours of FYLO work
+  away). So SDK-10 never lands before K30 passes; K30's window opens when
+  DB-2 is published.
 - **SQL stays:** FYLO SQL v1 (ADR 0035 Amendment 2, FYLO develop 7a07a33,
   in DB-2) keeps devicebox's six statement shapes (dotted paths, a bound
   `LIMIT`, `TRUE`/`FALSE`/`NULL`, `SELECT *`) and `EXPLAIN`; FYLO's SDK-4
@@ -3459,9 +3463,22 @@ Coordinator's notes).
     event is redelivered for a consumer), and the earlier transactions
     of the action are completed by that retry (the ordering rule below);
   - reads inside use `"transaction":<id>` to see their own writes.
-- **Blocked until** TAC-FY2 is in a TACHYON release Mesail pins, and FYLO
-  says how a transaction of N writes costs on ATLAS (about one commit, or
-  about N). If it costs about N, K38 brings little and stays backlog.
+- **Blocked until** TAC-FY2 is in a TACHYON release Mesail pins, and FYLO's
+  measured table is in. FYLO's design target (2026-11-21): a transaction
+  of N writes costs about ONE commit plus a small cost per document, not N
+  commits. FYLO's SDK-3 measures a single put against transactions of 1,
+  5, 25 and 100 writes on ANVIL's NFS mount; plan K38 from that table, not
+  from the target. If a transaction costs about N commits, K38 brings
+  little and stays backlog.
+- **Cost per commit:** FYLO plans to cut it in its next release
+  (FYLO-PERF1 measures where an ATLAS commit's 228 ms go and cuts the
+  network round trips per commit). So "fewer collections per send" (for
+  example the sender's read position inside the conversation document) is
+  not a slice yet: it becomes one only if OPERATIONS.md section 7.6 still
+  finds a plain send's p95 over 3 s with FYLO's next release.
+- **Across collections:** the user decided "One-collection only"; FYLO
+  takes Mesail's case (an action that writes a few collections) back to
+  the hub as a question. Until an answer, K38 is designed per collection.
 - **Rule for every action:** group the writes per collection into one
   transaction. Write the derived and helper documents first, and the
   document that carries the staged outbox events (or, for an event
