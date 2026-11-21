@@ -3141,6 +3141,28 @@ pass on a FYLO `develop` build.
     `handshake`; check that both stay in the Store answers.
 - **Not owned:** the old names in history (K12, PHASE2_EVIDENCE.md,
   CHANGELOG.md) stay as written.
+- **System-disk roots (FYLO develop, and so FYLO's next release):** FYLO
+  refuses a root in a temp folder on the system disk unless
+  `FYLO_ALLOW_SYSTEM_DISK=1` is set. Checked on develop bac0ef8e:
+  - the only Mesail test that starts `fylo` on a temp folder is
+    `fyloStorage_test.go` (devicebox): root `t.TempDir()`, with the flag
+    already set (K17a). K30 moves that root into the HANGAR test image
+    (under the gates' FYLO folder, `MESAIL_FYLO_ROOT` or the image mount
+    `slice-<id>/`), skips with a clear message when the image is not
+    attached, and drops the flag;
+  - the app tests' roots come from each app's `.env`, which `gates.sh`
+    writes inside the image mount, and `scripts/native/run-all.sh` and the
+    nightly use the same image; the Floci stack's roots are on the dev
+    host's ext4 data disk on HANGAR. None of these needs the flag;
+  - `.env` files and `MESAIL_FYLO_ROOT` can still name another folder, so
+    `gates.sh` refuses a FYLO root outside the image mount (or a folder on
+    HANGAR) with a clear message instead of setting the flag;
+  - folders made with `t.TempDir()` or `os.MkdirTemp` elsewhere
+    (`kit/collections` known-collection names, mail-in's realm tokens,
+    `tools/clientviews`) are not FYLO roots and stay as they are.
+  The flag stays a last resort for tests only, set in the test's own
+  process, and never in a production setting, image or `stack.json`.
+  MSL-INT reports which tests hit the refusal; each one is fixed in K30.
 - **Done when:** before the release, on the branch: `git grep -P` for
   the seven old names finds them only in history; the devicebox test
   passes on FYLO's DB-1 and DB-2 `develop` builds; `capture_test.sh`
