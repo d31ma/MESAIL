@@ -21,6 +21,12 @@ type menuState struct {
 	ExposedItems   []string `json:"exposedItems"`
 }
 
+type itemBox struct {
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Label string  `json:"label"`
+}
+
 type focusState struct {
 	Description   string `json:"description"`
 	InMenu        bool   `json:"inMenu"`
@@ -64,6 +70,16 @@ const focusActivatorScript = `(() => {
   target.focus();
   return JSON.stringify(document.activeElement === target);
 })()`
+
+const firstItemBoxScript = `(() => {
+  const menu = [...document.querySelectorAll('w-menu')].find((m) => m.getAttribute('activator') === %q);
+  const item = menu ? [...menu.querySelectorAll('.w-menu-content .w-menu-item, .w-menu-content [role^=menuitem]')].find((e) => e.getClientRects().length > 0) : null;
+  if (!item) { return JSON.stringify(null); }
+  const box = item.getBoundingClientRect();
+  return JSON.stringify({ x: box.left + box.width / 2, y: box.top + box.height / 2, label: (item.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 30) });
+})()`
+
+const openDialogScript = `(() => JSON.stringify([...document.querySelectorAll('dialog[open], [role=dialog], [role=alertdialog]')].some((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden')))()`
 
 const blurScript = `(() => { if (document.activeElement) { document.activeElement.blur(); } window.scrollTo(0, 0); return JSON.stringify(true); })()`
 
@@ -224,6 +240,12 @@ func TestMenuKeyboard(t *testing.T) {
 			t.Run(name+"/shift-tab-returns", func(t *testing.T) {
 				checkShiftTabReturns(t, openMenuScreen(t, view, size), activator)
 			})
+			t.Run(name+"/arrow-shift-tab-returns", func(t *testing.T) {
+				checkArrowShiftTabReturns(t, openMenuScreen(t, view, size), activator)
+			})
+			t.Run(name+"/item-click-returns", func(t *testing.T) {
+				checkItemClickReturns(t, openMenuScreen(t, view, size), activator)
+			})
 		}
 	}
 }
@@ -276,4 +298,41 @@ func checkShiftTabReturns(t *testing.T, visit *Visit, activator string) {
 	if state := focus(t, visit); state.OnActivatorOf != activator {
 		t.Errorf("Shift+Tab from the menu of #%s put focus on %s, not on its button", activator, state.Description)
 	}
+}
+
+func expectFocusBack(t *testing.T, visit *Visit, activator string, action string) {
+	t.Helper()
+	if openMenuCount(menus(t, visit)) != 0 {
+		t.Errorf("%s did not close the menu of #%s", action, activator)
+	}
+	if state := focus(t, visit); state.OnActivatorOf != activator {
+		t.Errorf("%s: focus is on %s, not back on the button #%s", action, state.Description, activator)
+	}
+}
+
+func checkArrowShiftTabReturns(t *testing.T, visit *Visit, activator string) {
+	focusActivator(t, visit, activator)
+	pressKey(t, visit, kb.ArrowDown)
+	if state := focus(t, visit); !state.InMenu {
+		t.Fatalf("ArrowDown on #%s did not open its menu with focus on an item (focus on %s)", activator, state.Description)
+	}
+	pressShiftTab(t, visit)
+	expectFocusBack(t, visit, activator, "ArrowDown, then Shift+Tab")
+}
+
+func checkItemClickReturns(t *testing.T, visit *Visit, activator string) {
+	openWithSpace(t, visit, activator)
+	box := evaluate[*itemBox](t, visit, fmt.Sprintf(firstItemBoxScript, activator))
+	if box == nil {
+		t.Fatalf("the open menu of #%s shows no item to click", activator)
+	}
+	if err := chromedp.Do(visit.context, chromedp.MouseClickXY(box.X, box.Y)); err != nil {
+		t.Fatalf("click on %q: %v", box.Label, err)
+	}
+	pause(visit)
+	if evaluate[bool](t, visit, openDialogScript) {
+		t.Logf("the item %q opened a dialog; closing it with Escape before the focus check", box.Label)
+		pressKey(t, visit, kb.Escape)
+	}
+	expectFocusBack(t, visit, activator, fmt.Sprintf("a click on the item %q", box.Label))
 }
