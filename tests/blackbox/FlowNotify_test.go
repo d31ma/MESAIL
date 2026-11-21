@@ -112,7 +112,7 @@ func TestFlowNotifyAnotherPersonsNotificationIsNotFound(t *testing.T) {
 	stack := NewStack(t)
 	sent := directMessageToBo(t, stack, uniqueClientId("notify not eve"))
 	item := awaitNotification(t, stack, NewRenewingToken(t, stack, "BO"), sent.Message.MessageId)
-	stack.Call(t, http.MethodPut, markReadPath(item.NotificationId), stack.Token(t, "EVE"), nil).ExpectError(t, http.StatusNotFound, "not_found")
+	stack.Call(t, http.MethodPut, markReadPath(item.NotificationId), fixture(t, stack, "EVE").AccessToken, nil).ExpectError(t, http.StatusNotFound, "not_found")
 }
 
 func TestFlowNotifyMutedConversationIsNotNotified(t *testing.T) {
