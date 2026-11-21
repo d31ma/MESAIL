@@ -3294,6 +3294,29 @@ SMTP edge is inbound only, so mail to an outside address can only reach
 - **Done when:** both tests pass on the dev host's Floci stack, and no
   production file names the sink.
 
+### K35. Turn off workers with TACHYON's setting and remove K27's bridge (backlog, after the TACHYON release with TAC-WK1, about 2 hours)
+K27 (merged, develop bac0ef8e) stops every Lambda app's `@Schedule`
+workers with Mesail's own bridge: `kit/scheduling` (`WorkerSwitch`), the
+wrapper in each app's `server/workers/`, and the tests in
+`tests/workers/`. TACHYON's TAC-WK1 adds a setting that stops `ty start`
+from running workers at all.
+- **Blocked until** the TACHYON release with TAC-WK1 is out and Mesail's
+  TACHYON pin bump is on `develop` (take the exact setting from that
+  release's docs).
+- **Builds:** each Lambda app's `application-lambda.json` (the `lambda`
+  profile; add the file where it is missing) sets `"server": {"workers":
+  false}`. Then remove `kit/scheduling` (and its line in `kit.list`), the
+  workers' wrapper in every app, and `tests/workers/`. `realtime`
+  (`container` profile) and native runs keep their workers.
+- **Writers to stop** (OPERATIONS.md section 7.3) do not change: the
+  router, `scheduler`, `scheduler-daily`, `scheduler-fast`, the SMTP edge
+  and `realtime`.
+- **Done when:** with `YON_PROFILE=lambda` no worker starts (the `ty start`
+  log shows none, and a Floci run with `datasource.logcalls` on shows no
+  store call at the workers' first-run times while the schedulers are
+  stopped); native runs still run their workers; `git grep` finds no
+  `WorkerSwitch` or `kit/scheduling`; `scripts/gates.sh --all` passes.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3308,7 +3331,9 @@ Release blockers:
   Coordinator's notes: rebuild every image,
   `TAC_SHUTDOWN_GRACE_SECONDS=5`, ADR 0128's new meaning of `timeout`),
   and K22 phase 2 proves it on Floci.
-- **K27:** no in-function `@Schedule` workers in the Lambda profile.
+- **K27:** no in-function `@Schedule` workers in the Lambda profile:
+  merged (develop bac0ef8e). K35 replaces its bridge after the TACHYON
+  release with TAC-WK1.
 - **FYLO roots on ATLAS** (the user, 2026-11-21: "Mesail production data
   will live on ATLAS", then "FYLO folders on ATLAS (Rec.)"; ADR 0004 and
   ADR 0007 amended): each root is a folder on the ATLAS NFS share, which
