@@ -25,6 +25,9 @@ Run:
                            for a short smoke run, e.g. the apps that use FYLO
   --floci-tests <regex>    floci step runs only the blackbox tests matching it (MESAIL_TEST_RUN)
   --keep-worktree          keep the worktree (for debugging)
+  --keep-stack             leave the Floci stack running and keep its :int-<run> images, for the next
+                           tester on the dev host (who stops the stack); remove the images later with
+                           eval "$(mesail-devhost env)"; docker rmi $(docker images -q --filter reference='*:int-<run>')
 
 A released binary is passed like any other build: download the release asset, take its hash
 from the release's checksum file, and give both (for example --fylo-linux <file> --fylo-linux-sha256 <hex>).
@@ -87,6 +90,7 @@ parse_arguments() {
   RUN_STEPS="$(all_steps)"
   MESAIL_REF=origin/develop
   KEEP_WORKTREE=0
+  KEEP_STACK=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --ty) TY_MAC="$(option_value "$@")"; shift 2 ;;
@@ -105,6 +109,7 @@ parse_arguments() {
       --native-apps) NATIVE_APPS="$(option_value "$@")"; shift 2 ;;
       --floci-tests) FLOCI_TESTS="$(option_value "$@")"; shift 2 ;;
       --keep-worktree) KEEP_WORKTREE=1; shift ;;
+      --keep-stack) KEEP_STACK=1; shift ;;
       -h | --help) usage ;;
       *) fail "unknown option $1 (see --help)" ;;
     esac
@@ -300,6 +305,7 @@ image_tag() {
 
 floci_settings() {
   MESAIL_IMAGE_TAG="$(image_tag)"
+  export MESAIL_INT_KEEP_STACK="$KEEP_STACK"
   export MESAIL_OWNER=msl-int MESAIL_LOG_DIR="$RUN_LOGS/floci" MESAIL_IMAGE_TAG MESAIL_NO_PRUNE=1
   if [ -n "${FLOCI_TESTS:-}" ]; then export MESAIL_TEST_RUN="$FLOCI_TESTS"; fi
   mkdir -p "$MESAIL_LOG_DIR"
@@ -329,6 +335,7 @@ floci_steps() {
   wanted_step floci || return 0
   run_step floci "MESAIL_IMAGE_TAG=$(image_tag) MESAIL_TEST_RUN='${FLOCI_TESTS:-}' scripts/int/floci.sh (after run-all.sh --bundle-only)" floci_stack
   local code=$?
+  if [ "$KEEP_STACK" = 1 ]; then echo "=== the stack and its :$(image_tag) images are kept (--keep-stack)"; return "$code"; fi
   run_step floci-images "docker rmi <every :$(image_tag) image>" remove_own_images
   return "$code"
 }

@@ -10,7 +10,7 @@ Usage: scripts/int/floci.sh
 The Floci part of an integration run (scripts/int/run.sh) on the running Mesail dev host:
 build the images (MESAIL_IMAGE_TAG, MESAIL_INT_TOOLS), up.sh, deploy.sh, blobs.sh, the seed
 and the blackbox tests (test.sh; MESAIL_TEST_RUN limits them), then save the container logs
-and `docker compose stop` this stack. It never runs down.sh, removes no container, network or
+and `docker compose stop` this stack (MESAIL_INT_KEEP_STACK=1 leaves it running for the next tester). It never runs down.sh, removes no container, network or
 volume, and never starts, stops or recreates the dev host or its Floci (the dev host rules).
 Run it inside the mesail-docker lock; scripts/int/run.sh does.
 TEXT
@@ -47,6 +47,7 @@ save_logs() {
 }
 
 stop_stack() {
+  if [ "${MESAIL_INT_KEEP_STACK:-0}" = 1 ]; then echo "the stack is left running (MESAIL_INT_KEEP_STACK=1); its next user stops it"; return 0; fi
   if [ ! -f "$(mesail_log_dir)/compose-profile" ]; then echo "the stack was not started"; return 0; fi
   MESAIL_BLOBS_VOLUME="$(cat "$(mesail_log_dir)/blobs-volume" 2> /dev/null || true)"
   export MESAIL_BLOBS_VOLUME
