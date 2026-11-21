@@ -3109,6 +3109,37 @@ of 2026-11-21 (HAVEN and ATLAS for production only).
   new mount point; the old path still works through the link; nothing in
   the repository names `AtlasFylo` except the link's removal date.
 
+### K30. Move Mesail's direct FYLO ops to the Store operations (backlog, about 2 hours)
+The user decided, through FYLO-SDK1 (2026-11-21): "Remove with the SDK".
+FYLO's layout release removes the old machine operations (`getDoc`,
+`getLatest`, `putData`, `patchDoc`, `delDoc`, `findDocs`,
+`inspectCollection`). Only the Store operations stay: `storeSave`,
+`storeFindById`, `storePatch`, `storeDeleteById`, `storeFind`,
+`storeCount`, `storeExists`, `storeDelete`, `collectionExists`,
+`listCollections`, `createCollection`, `dropCollection`, plus the queue
+operations and `executeSQL`. App code is not affected, because it reaches
+FYLO only through TACHYON. Only the places that speak to `fylo exec`
+directly change.
+- **Blocked until** FYLO's SDK-3 is on FYLO `develop` (take the exact
+  request and answer shapes from there). **Needed before** FYLO's layout
+  release, and so before Mesail moves to that release.
+- **Owns:**
+  - `apps/devicebox/server/packages/devicebox/fyloStorage_test.go`: its
+    fake storage sends `inspectCollection`, `putData`, `patchDoc`,
+    `delDoc` and `getLatest`;
+  - `deploy/floci/stack.json` `captureSteps`: two `findDocs` and two
+    `putData` steps (directory's `local-parts` and `people`);
+  - `scripts/floci/capture-timing.sh`, `capture.sh` and `capture_test.sh`,
+    only if they read the old answers. Today `capture-timing.sh` reads
+    only `.ok` and `.error.code` (`.code`), and its first step is
+    `handshake`; check that both stay in the Store answers.
+- **Not owned:** the old names in history (K12, PHASE2_EVIDENCE.md,
+  CHANGELOG.md) stay as written.
+- **Done when:** `git grep -P` for the seven old names finds them only in
+  history; the devicebox test passes on a `fylo` built from FYLO
+  `develop` with SDK-3; `capture_test.sh` passes; and one OP8 capture on
+  the dev host times every step with `ok=true`.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3131,6 +3162,8 @@ Release blockers:
     (c4abfa9b). Left: Mesail's release test on FYLO's frozen release
     commit F; FYLO-R1 builds `fylo` at F and sends its paths and SHA-256
     through the MESAIL Build Coordinator to a Mesail session that runs it;
+    K30 (Store operations only) must be on `develop` before FYLO's
+    layout release;
   - TACHYON `develop`: K22 phase 2 on the TAC-ST2 branch, and again on
     `develop` after TAC-ST2 merges;
   - DuVay: DT3 tested d977477 (no new bug); DT4 retests e08ae67 (the
