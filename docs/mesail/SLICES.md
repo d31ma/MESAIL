@@ -101,8 +101,8 @@ wave run at the same time.
    without Tachyon. Design this way from the start (wave 2 slices M3, R1,
    N1 included).
 9. **FYLO on a slow network disk (every FYLO-owning slice).** In
-   production on kestrel, live roots in Lambda form are on ATLAS today (the
-   open decision in "Open before the production release"), where a write
+   production on kestrel, live roots in Lambda form are on ATLAS (the
+   user, 2026-11-21: "Mesail production data will live on ATLAS"), where a write
    takes about 109 ms with stalls up to 11 s (ADR 0004 section 4). The dev
    host's data disk was on ATLAS too until 2026-11-21; it is on HANGAR now,
    but the limits below stay, because they protect production. So: at most 25 FYLO writes and 20 seconds of work
@@ -3111,17 +3111,20 @@ of 2026-11-21 (HAVEN and ATLAS for production only).
 
 ### K30. Move Mesail's direct FYLO ops to the Store operations (backlog, about 2 hours)
 The user decided, through FYLO-SDK1 (2026-11-21): "Remove with the SDK".
-FYLO's layout release removes the old machine operations (`getDoc`,
+FYLO's next release removes the old machine operations (`getDoc`,
 `getLatest`, `putData`, `patchDoc`, `delDoc`, `findDocs`,
 `inspectCollection`). Only the Store operations stay: `storeSave`,
 `storeFindById`, `storePatch`, `storeDeleteById`, `storeFind`,
 `storeCount`, `storeExists`, `storeDelete`, `collectionExists`,
 `listCollections`, `createCollection`, `dropCollection`, plus the queue
-operations and `executeSQL`. App code is not affected, because it reaches
-FYLO only through TACHYON. Only the places that speak to `fylo exec`
-directly change.
+operations and `executeSQL`. That release also carries the SDK, the layout
+work and network roots; there is no separate layout release. App code is
+not affected, because it reaches FYLO only through TACHYON. Only the
+places that speak to `fylo exec` directly change. FYLO tracks this slice
+as its SDK-9, and removes the old operations only after K30 and TAC-FY2
+pass on a FYLO `develop` build.
 - **Blocked until** FYLO's SDK-3 is on FYLO `develop` (take the exact
-  request and answer shapes from there). **Needed before** FYLO's layout
+  request and answer shapes from there). **Needed before** FYLO's next
   release, and so before Mesail moves to that release.
 - **Owns:**
   - `apps/devicebox/server/packages/devicebox/fyloStorage_test.go`: its
@@ -3140,6 +3143,28 @@ directly change.
   `develop` with SDK-3; `capture_test.sh` passes; and one OP8 capture on
   the dev host times every step with `ok=true`.
 
+### K31. Production backup and restore of FYLO roots on ATLAS (backlog, with Platform)
+The user keeps CITADEL's fast `async` export for ATLAS (2026-11-21: "keep
+the fast `async` mode"). So a CITADEL crash or power cut can lose the last
+seconds of writes. FYLO finds a damaged file when it reads it and refuses
+it (FYLO's layout spec, section 20.2), so production needs backups and a
+tested restore.
+- **Backups, on a schedule** (Platform owns the scheduler and ATLAS):
+  every FYLO root (btrfs snapshots on CITADEL, or `fylo pack` to `.vdbx`,
+  as ADR 0004 section 4 already does before every deploy), Keycloak's
+  SQLite file, and the files (attachments and raw mail). Keep them apart
+  from the live roots, and write down how many copies are kept and for how
+  long.
+- **Restore runbook** in OPERATIONS.md section 7: `fylo verify --root` to
+  find the damaged documents; restore the named documents from the newest
+  backup; `fylo verify --root` again; then `rebuildCollection` for each
+  collection that had a restored document. Take the exact commands from the
+  FYLO release that Mesail pins.
+- **Done when:** the schedule runs on the production host; OPERATIONS.md
+  section 7 has the runbook; and one restore drill on a copy (never on a
+  live root, never on the dev host's data) restores a damaged document,
+  passes `fylo verify --root`, and is recorded with its time and result.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3155,6 +3180,17 @@ Release blockers:
   `TAC_SHUTDOWN_GRACE_SECONDS=5`, ADR 0128's new meaning of `timeout`),
   and K22 phase 2 proves it on Floci.
 - **K27:** no in-function `@Schedule` workers in the Lambda profile.
+- **FYLO roots on ATLAS** (the user, 2026-11-21: "Mesail production data
+  will live on ATLAS"; ADR 0004 and ADR 0007 stand): a FYLO root on ATLAS
+  needs the FYLO release with network roots (NR leases). Until then FYLO
+  refuses a native root there (EREMOTEROOT).
+- **Cold first call, measured on production:** once TAC-ST2 and FYLO-CR1
+  are released, measure the first store call after a start on a
+  production or staging host (never the dev host), and check it fits the
+  callers' limits (identity's 10 s per call to directory).
+- **Backups and restore (K31):** ATLAS keeps the `async` export (the
+  user, 2026-11-21: "keep the fast `async` mode"), so scheduled backups,
+  the restore runbook and one restore drill must be done first.
 - **Dependencies tested on their `develop` (the release rule):** Mesail
   tests each dependency's `develop` build before that dependency's release,
   then moves to the release:
@@ -3163,24 +3199,12 @@ Release blockers:
     commit F; FYLO-R1 builds `fylo` at F and sends its paths and SHA-256
     through the MESAIL Build Coordinator to a Mesail session that runs it;
     K30 (Store operations only) must be on `develop` before FYLO's
-    layout release;
+    next release;
   - TACHYON `develop`: K22 phase 2 on the TAC-ST2 branch, and again on
     `develop` after TAC-ST2 merges;
   - DuVay: DT3 tested d977477 (no new bug); DT4 retests e08ae67 (the
     w-menu fix, DUVAY-11). K26's contrast fix does not wait for DuVay's
     release.
-
-Open decisions:
-- **Production FYLO data placement on kestrel: open** (the user,
-  2026-11-21: "Decide later"). Raise it through the hub before the
-  production release, with K22's numbers after TAC-ST2 and FYLO-CR1. ADR
-  0004 ("Where live roots live: on ATLAS") and ADR 0007 stay as they are
-  until then. The decision paper is `production-fylo-disk-note.md` in the
-  MESAIL Build Coordinator's notes. It covers where the data lives today
-  (ext4 inside the VM's raw disk on ATLAS over NFS), why that meets the
-  FYLO rule only by the letter (cold reads, writes, the `async` export),
-  and the options: a local disk on kestrel with backups to ATLAS, or ATLAS
-  with a warm-up read (K28).
 
 
 ## Wave 10: removed (ADR 0013 rejected, 2026-11-14)
