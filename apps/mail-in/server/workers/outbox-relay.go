@@ -15,10 +15,11 @@ import (
 type Handler struct{}
 
 func (handler Handler) POST() {
-	scheduling.WorkerSwitch{ApplicationJson: os.Getenv("YON_APPLICATION_JSON")}.Run(handler.call)
+	settings := os.Getenv("YON_APPLICATION_JSON")
+	scheduling.WorkerSwitch{ApplicationJson: settings}.Run(func() { handler.call(settings) })
 }
 
-func (handler Handler) call() {
+func (handler Handler) call(settings string) {
 	var snapshot struct {
 		Yon struct {
 			Server struct {
@@ -26,7 +27,7 @@ func (handler Handler) call() {
 			} `json:"server"`
 		} `json:"yon"`
 	}
-	json.Unmarshal([]byte(os.Getenv("YON_APPLICATION_JSON")), &snapshot)
+	json.Unmarshal([]byte(settings), &snapshot)
 	authorization, failure := mailin.SettingsReader{Environment: os.Getenv}.Authorize()(mailin.Directory{}.InstallWide())
 	address := "http://127.0.0.1:" + strconv.Itoa(snapshot.Yon.Server.Port) + "/api/v1/mail-in/outbox/relay"
 	request, requestFailure := http.NewRequest(http.MethodPost, address, nil)

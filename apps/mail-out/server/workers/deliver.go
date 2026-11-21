@@ -17,10 +17,11 @@ type Handler struct{}
 func (Handler) timeout() time.Duration { return 60 * time.Second }
 
 func (handler Handler) POST() {
-	scheduling.WorkerSwitch{ApplicationJson: os.Getenv("YON_APPLICATION_JSON")}.Run(handler.call)
+	settings := os.Getenv("YON_APPLICATION_JSON")
+	scheduling.WorkerSwitch{ApplicationJson: settings}.Run(func() { handler.call(settings) })
 }
 
-func (handler Handler) call() {
+func (handler Handler) call(settings string) {
 	var snapshot struct {
 		Yon struct {
 			Server struct {
@@ -28,7 +29,7 @@ func (handler Handler) call() {
 			} `json:"server"`
 		} `json:"yon"`
 	}
-	json.Unmarshal([]byte(os.Getenv("YON_APPLICATION_JSON")), &snapshot)
+	json.Unmarshal([]byte(settings), &snapshot)
 	authorization, failure := oidc.ServiceTokensFactory{}.Configured().Authorization(oidc.InstallWide{}.DomainId())
 	base := "http://127.0.0.1:" + strconv.Itoa(snapshot.Yon.Server.Port) + "/api/v1/mail-out"
 	handler.post(base+"/jobs/deliver", authorization, failure)
