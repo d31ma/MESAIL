@@ -10,8 +10,8 @@ Usage: scripts/int/floci.sh
 The Floci part of an integration run (scripts/int/run.sh) on the running Mesail dev host:
 build the images (MESAIL_IMAGE_TAG, MESAIL_INT_TOOLS), up.sh, deploy.sh, blobs.sh, the seed
 and the blackbox tests (test.sh; MESAIL_TEST_RUN limits them), then save the container logs
-and `docker compose stop` this stack (MESAIL_INT_KEEP_STACK=1 leaves it running for the next tester). It never runs down.sh, removes no container, network or
-volume, and never starts, stops or recreates the dev host or its Floci (the dev host rules).
+and `docker compose stop` this stack (MESAIL_INT_KEEP_STACK=1 leaves a passing stack running for the next tester).
+It never runs down.sh, removes no container, network or volume, and never starts, stops or recreates the dev host or its Floci (the dev host rules).
 Run it inside the mesail-docker lock; scripts/int/run.sh does.
 TEXT
   exit 2
@@ -47,7 +47,8 @@ save_logs() {
 }
 
 stop_stack() {
-  if [ "${MESAIL_INT_KEEP_STACK:-0}" = 1 ]; then echo "the stack is left running (MESAIL_INT_KEEP_STACK=1); its next user stops it"; return 0; fi
+  local code="$1"
+  if [ "${MESAIL_INT_KEEP_STACK:-0}" = 1 ] && [ "$code" = 0 ]; then echo "the stack is left running (MESAIL_INT_KEEP_STACK=1, run passed); its next user stops it"; return 0; fi
   if [ ! -f "$(mesail_log_dir)/compose-profile" ]; then echo "the stack was not started"; return 0; fi
   MESAIL_BLOBS_VOLUME="$(cat "$(mesail_log_dir)/blobs-volume" 2> /dev/null || true)"
   export MESAIL_BLOBS_VOLUME
@@ -66,7 +67,7 @@ finish() {
   local code=$?
   if [ -n "${MESAIL_WRITER_GUARD:-}" ]; then kill "$MESAIL_WRITER_GUARD" 2> /dev/null || true; fi
   mesail_step save-logs save_logs || true
-  mesail_step compose-stop stop_stack || code=1
+  mesail_step compose-stop stop_stack "$code" || code=1
   mesail_step left-behind left_behind || true
   if [ -n "${MESAIL_SECRETS_FILE:-}" ]; then rm -f "$MESAIL_SECRETS_FILE"; fi
   echo "=== int floci rc=$code (logs in $(mesail_log_dir))"
