@@ -206,6 +206,28 @@ func (test *InboundControllerTest) TestAHandOffIsUnavailableWhenTheDirectoryIsDo
 	Assert.IsTrue(!world.CopyExists(envelope), "the blob was copied")
 }
 
+func (test *InboundControllerTest) TestAHandOffIsUnavailableWhenTheDirectoryAnswersNotFoundWithAnotherCode() {
+	world := InboundTestSetup{}.World()
+	world.UseServices()
+	defer world.Cleanup()
+	envelope := world.HandOffTo(world.OtherNotFound())
+	_, err := world.Inbound.PostMessage(envelope)
+	var failure *StorageUnavailable
+	Assert.IsTrue(errors.As(err, &failure), "want StorageUnavailable")
+	Assert.Equals(2514, world.ErrorNumber(err))
+	Assert.IsTrue(!world.CopyExists(envelope), "the blob was copied")
+}
+
+func (test *InboundControllerTest) TestAHandOffToADomainThatIsNotHostedIsRefused() {
+	world := InboundTestSetup{}.World()
+	world.UseServices()
+	defer world.Cleanup()
+	_, err := world.Inbound.PostMessage(world.HandOffTo(world.NotHosted()))
+	Assert.IsTrue(world.IsNotFound(err), "want NotFound")
+	Assert.Equals(2515, world.ErrorNumber(err))
+	Assert.Equals("recipients", world.NotFoundField(err))
+}
+
 func (test *InboundControllerTest) TestAnEdgeMessageToAnUnknownMailboxIsNotCheckedAgain() {
 	world := InboundTestSetup{}.World()
 	world.UseServices()

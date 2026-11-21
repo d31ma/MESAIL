@@ -224,9 +224,10 @@ func (world *InboundTestSetup) directoryAddress(writer http.ResponseWriter, requ
 		writer.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
+	codes := map[string]string{world.NotHosted(): "domain_not_hosted", world.OtherNotFound(): "something_else"}
 	if kinds[address] == "" {
 		writer.WriteHeader(http.StatusNotFound)
-		writer.Write([]byte(`{"code":"not_found","message":"[MS1015]: Not found."}`))
+		writer.Write([]byte(`{"code":"` + cmp.Or(codes[address], "not_found") + `","message":"[MS1015]: Not found."}`))
 		return
 	}
 	json.NewEncoder(writer).Encode(map[string]string{"address": address, "domainId": world.Domain, "kind": kinds[address], "targetId": "per_1"})
@@ -246,6 +247,14 @@ func (world *InboundTestSetup) Unknown() string {
 
 func (world *InboundTestSetup) DirectoryDown() string {
 	return "down@" + world.Domain
+}
+
+func (world *InboundTestSetup) NotHosted() string {
+	return "ana@" + world.Retired
+}
+
+func (world *InboundTestSetup) OtherNotFound() string {
+	return "lost@" + world.Domain
 }
 
 func (world *InboundTestSetup) AskedAddresses() []string {
