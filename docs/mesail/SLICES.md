@@ -3179,21 +3179,20 @@ tested restore.
   file (an orphan file without a record is harmless and shows in the
   attachments orphan report).
 - **Size estimate for Platform** (planning numbers, not measured; the
-  number of people is not decided, so the table scales per person): per
-  person and day, about 120 messages in and out (about 12 with
-  attachments of about 1 MiB each). FYLO roots grow about 6 MB (message
-  records, `inbound-content`, the search index, which FYLO estimates at
-  about 3 to 6 times the text), the attachments about 12 MB, and the raw
-  mail store about 20 MB (it keeps attachments again, base64 encoded).
-  So about 40 MB per person per day, about 1.2 GB per person per month,
-  and about 14 GB per person per year without a retention limit. Keycloak
-  stays under 100 MB. For 50 people: about 2 GB new data a day, 60 GB a
-  month. Mail is mostly appended, so a day's snapshot change is about the
+  user, 2026-11-21: "About 10 people"): per person and day, about 120
+  messages in and out (about 12 with attachments of about 1 MiB each).
+  FYLO roots grow about 6 MB (message records, `inbound-content`, the
+  search index, which FYLO estimates at about 3 to 6 times the text), the
+  attachments about 12 MB, and the raw mail store about 20 MB (it keeps
+  attachments again, base64 encoded). So about 40 MB per person per day.
+  For about 10 people: about 400 MB of new data a day, 12 GB a month and
+  140 GB a year before any retention rule (K32). Keycloak stays under
+  100 MB. Mail is mostly appended, so a day's snapshot change is about the
   new data plus FYLO's rewrites (index pages, about 2 times the FYLO
-  growth): about 2.6 GB a day for 50 people, and about 10 GB of extra
-  space for 14 days of daily snapshots. The blobs (attachments and raw
-  mail) are about 80% of it. Measure the real numbers in the first month
-  of production and update PLAT-19.
+  growth): about 520 MB a day, and about 2 GB of extra space for 14 days
+  of daily snapshots. The blobs (attachments and raw mail) are about 80%
+  of it. Measure the real numbers in the first month of production and
+  update PLAT-19.
 - **Restore runbook** in OPERATIONS.md section 7 (FYLO's steps):
   1. stop every writer of that root first (never restore under a running
      owner: `scripts/floci/writers.sh` or the production equivalent);
@@ -3214,6 +3213,33 @@ tested restore.
   CITADEL; OPERATIONS.md section 7 has the runbook; the drill passed `fylo
   verify --root` with its measured times written in OPERATIONS.md; and
   Keycloak signs in a person from the restored copy.
+
+### K32. Enforce each domain's retention days (backlog, about one day)
+A domain's `limits` already has a retention in days (DOMAIN.md
+"Domain"), and a DomainAdmin manages it (SPEC.md section 3, "Actors"), but no service
+deletes old mail yet. Only `messaging`'s own `changes` log has a retention
+(`ChangeRetention`). Without a rule, about 10 people add about 140 GB a
+year (K31), most of it attachments and raw mail.
+- **Rule:** a domain with no retention set keeps everything (today's
+  behaviour). A default retention for every domain is a user decision,
+  raised through the hub; this slice does not set one.
+- **Whole months:** the large collections are already split by month
+  (`messages`, `deliveries`, `search-index`, `notifications`,
+  `inbound-content`; DOMAIN.md "FYLO layout"). So a daily job per domain
+  drops the monthly collections that are fully older than the retention
+  (`dropCollection`, one call each), and the retention rounds up to whole
+  months. No per-message deletes.
+- **Files:** the attachments and raw mail files of the dropped months are
+  deleted after their collections are gone (never before), within the
+  limits of rule 9 (at most 25 deletes and 20 s per call, `more: true`).
+  The attachments orphan report must then show nothing for those months.
+- **Clients:** a device that still has a dropped message offline removes it
+  at its next sync (ADR 0006); the slice checks the sync path handles a
+  missing month.
+- **Done when:** a domain with a retention of 1 month drops its older
+  monthly collections and their files in a test on the dev host; a domain
+  with no retention keeps everything; the job is idempotent; and
+  OPERATIONS.md says how to set the retention and how much space it frees.
 
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
