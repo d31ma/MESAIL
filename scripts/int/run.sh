@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2329
 set -uo pipefail
 
 usage() {
@@ -511,4 +512,4 @@ main() {
   [ "$(run_result)" = GREEN ]
 }
 
-main "$@"
+{ main "$@"; exit "$?"; }
