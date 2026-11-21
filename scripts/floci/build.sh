@@ -3,12 +3,23 @@ set -euo pipefail
 # shellcheck source-path=SCRIPTDIR
 . "$(dirname "$0")/common.sh"
 
+docker_build() {
+  BUILDX_GIT_INFO=false docker --context default buildx build --builder default --load --progress plain "$@" "$(mesail_root)"
+}
+
+uses_int_tools() {
+  [ -n "${MESAIL_INT_TOOLS:-}" ] && [ -n "$1" ]
+}
+
 build_image() {
   local target="$1" tag="$2"
   shift 2
-  BUILDX_GIT_INFO=false docker --context default buildx build --builder default --load --progress plain \
-    --platform "linux/$(mesail_stack .architecture)" \
-    --provenance=false --label org.mesail.stack=dev ${target:+--target "$target"} --tag "$tag" "$@" "$(mesail_root)"
+  if uses_int_tools "$target"; then
+    set -- --build-context "int-tools=$MESAIL_INT_TOOLS" \
+      --build-arg "INT_TY_SHA256=${MESAIL_INT_TY_SHA256:-}" --build-arg "INT_FYLO_SHA256=${MESAIL_INT_FYLO_SHA256:-}" "$@"
+  fi
+  docker_build --platform "linux/$(mesail_stack .architecture)" \
+    --provenance=false --label org.mesail.stack=dev ${target:+--target "$target"} --tag "$tag" "$@"
 }
 
 golang_image() {
@@ -49,6 +60,11 @@ trace_check() {
   mesail_step trace-wrapper-check check_trace_wrapper
 }
 
+prune_step() {
+  if [ "${MESAIL_NO_PRUNE:-0}" = 1 ]; then echo "image prune skipped (MESAIL_NO_PRUNE=1)"; return 0; fi
+  mesail_step prune-images docker image prune --force --filter label=org.mesail.stack=dev
+}
+
 chosen_services() {
   if [ "$#" -gt 0 ]; then printf '%s\n' "$@"; return; fi
   mesail_services
@@ -66,7 +82,7 @@ main() {
     mesail_step "build-$service" build_service "$service" || echo "warning: $service did not build; it is not deployed"
   done
   trace_check || echo "warning: the fylo trace wrapper check failed; the trace may be wrong"
-  mesail_step prune-images docker image prune --force --filter label=org.mesail.stack=dev
+  prune_step
 }
 
 main "$@"

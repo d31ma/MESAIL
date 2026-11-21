@@ -2,9 +2,10 @@
 set -euo pipefail
 
 duvay_repository() { echo "https://github.com/d31ma/DUVAY"; }
-duvay_release() { echo "v26.46.03"; }
+pinned_release() { echo "v26.46.03"; }
+pinned_commit() { echo "ba8f682a266fdfe28627d5331f457db52a0ae73e"; }
 duvay_version() { echo "26.46.03"; }
-duvay_commit() { echo "ba8f682a266fdfe28627d5331f457db52a0ae73e"; }
+duvay_commit() { echo "${MESAIL_DUVAY_COMMIT:-$(pinned_commit)}"; }
 package_name() { echo "@d31ma/duvay"; }
 package_license() { echo "MIT"; }
 script_name() { echo "duvay-mesail.js"; }
@@ -16,8 +17,20 @@ fail() {
   exit 1
 }
 
+duvay_release() {
+  if [ -z "${MESAIL_DUVAY_COMMIT:-}" ]; then pinned_release; return; fi
+  echo develop
+}
+
+check_commit_override() {
+  [ -z "${MESAIL_DUVAY_COMMIT:-}" ] && return 0
+  [[ "$MESAIL_DUVAY_COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "MESAIL_DUVAY_COMMIT must be a full 40-character commit SHA"
+  echo "DuVay commit override: $MESAIL_DUVAY_COMMIT (release label develop; integration runs only)"
+}
+
 usage() {
   echo "usage: scripts/vendor/duvay.sh [--app <app>] [--check]" >&2
+  echo "  MESAIL_DUVAY_COMMIT=<40-character sha> vendors that DuVay commit instead of the pin (scripts/int/run.sh)" >&2
   exit 2
 }
 
@@ -314,6 +327,7 @@ main() {
   [ -d "$root/apps/$app/client" ] || fail "no app folder apps/$app/client"
   output="$root/apps/$app/client/shared/vendor/duvay"
   check_icon_set "$root"
+  check_commit_override
   source="$(cache_folder)"
   work="$(work_folder)"
   trap 'rm -rf "$(work_folder)"' EXIT

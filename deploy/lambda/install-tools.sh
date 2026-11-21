@@ -32,8 +32,16 @@ install_go() {
   rm /tmp/go.tar.gz
 }
 
+install_local() {
+  name="$1" expected="$2"
+  echo "=== local $name for an integration run (not the pin)"
+  echo "$expected  /tmp/int-tools/$name" | sha256sum --check --strict
+  install -m 755 "/tmp/int-tools/$name" "/usr/local/bin/$name"
+}
+
 install_tachyon() {
   architecture="$1"
+  if [ -n "${INT_TY_SHA256:-}" ]; then install_local ty "$INT_TY_SHA256"; return; fi
   expected="$(checksum_for "$architecture" "$TY_SHA256_ARM64" "$TY_SHA256_AMD64")"
   download_checked "https://github.com/d31ma/TACHYON/releases/download/v${TACHYON_VERSION}/ty-linux-$(release_name "$architecture")" "$expected" /tmp/ty
   install -m 755 /tmp/ty /usr/local/bin/ty
@@ -42,16 +50,28 @@ install_tachyon() {
 
 install_fylo() {
   architecture="$1"
+  if [ -n "${INT_FYLO_SHA256:-}" ]; then install_local fylo "$INT_FYLO_SHA256"; return; fi
   expected="$(checksum_for "$architecture" "$FYLO_SHA256_ARM64" "$FYLO_SHA256_AMD64")"
   download_checked "https://github.com/d31ma/Fylo/releases/download/v${FYLO_VERSION}/fylo-linux-$(release_name "$architecture")" "$expected" /tmp/fylo
   install -m 755 /tmp/fylo /usr/local/bin/fylo
   rm /tmp/fylo
 }
 
+check_tachyon_version() {
+  if [ -n "${INT_TY_SHA256:-}" ]; then echo "ty $(ty --version) (integration build)"; return; fi
+  test "$(ty --version)" = "$TACHYON_VERSION"
+}
+
+check_fylo_version() {
+  if [ -n "${INT_FYLO_SHA256:-}" ]; then echo "fylo $(fylo --version) (integration build)"; return; fi
+  fylo --version | grep -F "$FYLO_VERSION"
+}
+
 check_versions() {
   /usr/local/go/bin/go version | grep -F "go${GO_VERSION} "
-  test "$(ty --version)" = "$TACHYON_VERSION"
-  fylo --version | grep -F "$FYLO_VERSION"
+  check_tachyon_version
+  check_fylo_version
+  rm -rf /tmp/int-tools
 }
 
 main() {

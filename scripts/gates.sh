@@ -52,10 +52,25 @@ show_failure() {
   tail -40 "$1"
 }
 
+override_sha256() {
+  case "$1" in
+    ty) echo "${MESAIL_TY_SHA256:-}" ;;
+    fylo) echo "${MESAIL_FYLO_SHA256:-}" ;;
+  esac
+}
+
+override_matches() {
+  local tool="$1" binary="$2" expected="$3"
+  tool_lock_verify "$binary" "$expected" || return 1
+  echo "$tool $("$binary" --version) $binary checksum ok (integration build, not the pinned $(tool_lock_version "$tool"))"
+}
+
 pinned_tool_matches() {
-  local tool="$1" binary="$2" expected found
+  local tool="$1" binary="$2" expected found override
   expected="$(tool_lock_version "$tool")"
+  override="$(override_sha256 "$tool")"
   [ -n "$binary" ] || { echo "$tool $expected is required and was not found"; return 1; }
+  [ -z "$override" ] || { override_matches "$tool" "$binary" "$override"; return; }
   found="$("$binary" --version)"
   [ "$found" = "$expected" ] || { echo "$tool must be $expected, found $found ($binary)"; return 1; }
   tool_lock_verify_binary "$tool" "$binary" && echo "$tool $found $binary checksum ok"
@@ -607,6 +622,8 @@ usage() {
   echo "  MESAIL_KEEP_TACHYON=1 keeps it (for debugging)" >&2
   echo "  every run also checks docs/mesail/ERRORS.md against the error numbers in code" >&2
   echo "  (tools/errornumbers, ADR 0009; apps in tools/controllers/unconverted.list are skipped)" >&2
+  echo "  MESAIL_TY, MESAIL_FYLO  another ty or fylo binary; with MESAIL_TY_SHA256 or MESAIL_FYLO_SHA256" >&2
+  echo "                  it may be a build other than the pin (checked by that SHA-256; scripts/int/run.sh)" >&2
   echo "  MESAIL_GOCACHE  the Go build cache (default on macOS: ~/Library/Caches/go-build-mesail," >&2
   echo "                  a local disk (on this Mac a link to HANGAR), not the ANVIL NFS link of ~/Library/Caches/go-build)" >&2
   echo "                  Go runs with -trimpath, so worktrees share cache entries; an unusable cache" >&2

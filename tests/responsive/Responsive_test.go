@@ -14,6 +14,7 @@ import (
 )
 
 type suite struct {
+	scheme        ColorScheme
 	restoreFailed bool
 	site          *Site
 	browser       *Browser
@@ -58,6 +59,10 @@ func prepareSuite() suite {
 	if chromePath == "" {
 		return suite{skipReason: missing}
 	}
+	scheme, err := ChosenColorScheme()
+	if err != nil {
+		return suite{setupError: err}
+	}
 	profile, err := SelectAppProfile(os.Getenv("MESAIL_APP"))
 	if err != nil {
 		return suite{setupError: err}
@@ -71,7 +76,7 @@ func prepareSuite() suite {
 		site.Close()
 		return suite{setupError: fmt.Errorf("starting %s: %w", chromePath, err)}
 	}
-	return suite{site: site, browser: browser}
+	return suite{site: site, browser: browser, scheme: scheme}
 }
 
 func distFolder(profile AppProfile) string {
@@ -103,6 +108,7 @@ func requireSuite(t *testing.T) {
 func openVisit(t *testing.T, options VisitOptions) *Visit {
 	t.Helper()
 	options.SignInByForm = shared.restoreFailed && options.State == SignedInState
+	options.Scheme = shared.scheme
 	visit, err := OpenVisit(shared.browser, shared.site, options)
 	if err != nil {
 		t.Fatalf("%s: %v", label(options), err)

@@ -29,6 +29,7 @@ const (
 )
 
 type VisitOptions struct {
+	Scheme        ColorScheme
 	Width         int64
 	Height        int64
 	Coarse        bool
@@ -230,7 +231,7 @@ func (visit *Visit) emulate() chromedp.Action[chromedp.Void] {
 		if err := visit.emulateViewport(ctx, target); err != nil {
 			return err
 		}
-		if _, err := cdp.Call(ctx, target, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: visit.Options.MediaFeatures}); err != nil {
+		if _, err := cdp.Call(ctx, target, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: visit.Options.Scheme.Fill(visit.Options.MediaFeatures)}); err != nil {
 			return err
 		}
 		if visit.Options.SafeArea == nil {

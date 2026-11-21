@@ -49,6 +49,8 @@ ENTRYPOINT ["/opt/mesail/keycloak/bin/mesail-supervisor"]
 
 FROM ${LAMBDA_ADAPTER_IMAGE} AS lambda-adapter
 
+FROM scratch AS int-tools
+
 FROM ${UBUNTU_IMAGE} AS lambda-tools
 ARG GO_VERSION=1.27.3
 ARG GO_SHA256_ARM64=a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49
@@ -59,8 +61,11 @@ ARG TY_SHA256_AMD64=125423c88dac3e888cc442c807f1beffc10ff8e5db2ac4cd70b331ecda5e
 ARG FYLO_VERSION=26.45.07
 ARG FYLO_SHA256_ARM64=45b83a0211a45bc3d50ee487867513c2c135b53bc914c728f78311f8b712667c
 ARG FYLO_SHA256_AMD64=c198bd3cb9651578756229eddde732ab810422c6ba5fc4a3cb4678d542bdc1cd
+ARG INT_TY_SHA256=
+ARG INT_FYLO_SHA256=
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 COPY --chmod=755 deploy/lambda/install-tools.sh /usr/local/lib/mesail/install-tools.sh
+COPY --from=int-tools / /tmp/int-tools/
 RUN set -eu \
  && apt-get update -q \
  && apt-get install -y -q --no-install-recommends ca-certificates curl tzdata jq socat \
