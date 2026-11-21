@@ -4,6 +4,7 @@ package blackbox
 
 import (
 	"net/http"
+	"os"
 	"testing"
 	"time"
 )
@@ -66,7 +67,15 @@ func TestFlowMailOutToAnUnknownMailboxInAHostedDomainIsReportedBounced(t *testin
 	awaitEmailStatus(t, stack, ana, sent.Message.MessageId, recipient, "bounced")
 }
 
+func skipWhenARelaySinkIsSet(t *testing.T) {
+	t.Helper()
+	if os.Getenv("MESAIL_RELAY_SINK_ADDR") != "" {
+		t.Skip("MESAIL_RELAY_SINK_ADDR is set: mail-out has a relay, so outside mail is sent, not deferred")
+	}
+}
+
 func TestFlowMailOutToAnOutsideAddressIsDeferredWithoutARelay(t *testing.T) {
+	skipWhenARelaySinkIsSet(t)
 	stack := NewStack(t)
 	ana := NewRenewingToken(t, stack, "ANA")
 	recipient := freshPrefix() + "@outside.test"
