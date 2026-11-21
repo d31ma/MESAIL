@@ -25,8 +25,14 @@ devhost() {
   "$HOME/.local/bin/mesail-devhost" "$@"
 }
 
+devhost_running() {
+  local status
+  status="$(devhost status 2>&1)"
+  grep -q '"status": "running_verified"' <<< "$status"
+}
+
 use_running_devhost() {
-  devhost status 2>&1 | grep -q '"status": "running_verified"' || { echo "the Mesail dev host is not running; ask mesail-devhost"; return 1; }
+  devhost_running || { echo "the Mesail dev host is not running; ask mesail-devhost"; return 1; }
   eval "$(devhost env)"
   export MESAIL_VM=mesail MESAIL_FLOCI_PORT=14566 MESAIL_FLOCI_URL=http://127.0.0.1:14566
 }
