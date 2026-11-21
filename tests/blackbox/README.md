@@ -113,8 +113,8 @@ seconds (a removal, a membership change) takes its token from
 `RenewingToken`, which signs in again when the token is 45 seconds old.
 
 The flow tests (`FlowTotp_test.go`, `FlowMailOut_test.go`,
-`FlowNotify_test.go`, `FlowDevicebox_test.go`, `FlowRealtime_test.go`;
-slice K33) prove whole flows end to end for the integration run
+`FlowNotify_test.go`, `FlowDevicebox_test.go`, `FlowRealtime_test.go`,
+`FlowJobs_test.go`; slice K33) prove whole flows end to end for the integration run
 (MSL-INT). Every name starts with `TestFlow<Area>`, so
 `MESAIL_TEST_RUN='^TestFlow'` runs them all and
 `MESAIL_TEST_RUN='^TestFlowMailOut'` one flow. They need no new variable.
@@ -138,5 +138,17 @@ slice K33) prove whole flows end to end for the integration run
   with `SocketClient.go`, a small standard-library WebSocket client, and
   answers `reauth`. It waits up to 75 seconds for a pushed frame (the
   Floci relay tick is 60 seconds when drain on write fails).
+
+- Scheduled jobs (`FlowJobs_test.go`, after slice K27: Floci's
+  `scheduler` every 60 seconds, `scheduler-fast` every 30 seconds for
+  mail-out's delivery and relay and notify's jobs and relay,
+  `scheduler-daily` for the changes clean-up; no in-function worker runs
+  in the Lambda profile). They never call a job route themselves, except
+  the daily clean-up, which they call with an install-wide service token
+  because a daily run cannot be waited for. The notify test makes 22 new
+  people, because notify writes at most 20 notifications inline and
+  `/notify/jobs/run` finishes the rest. The directory's removal job is
+  already proven by `TestD2*` in `Removals_test.go`, which wait for the
+  scheduler. Needs `MESAIL_SERVICE_CLIENT_SECRET`.
 
 A missing variable skips the test.
