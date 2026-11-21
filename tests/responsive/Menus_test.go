@@ -62,10 +62,10 @@ const focusActivatorScript = `(() => {
   const target = host.matches('button, a[href], [tabindex]') ? host : (host.querySelector('button, a[href], [tabindex]') || host);
   target.scrollIntoView({ block: 'center' });
   target.focus();
-  return document.activeElement === target;
+  return JSON.stringify(document.activeElement === target);
 })()`
 
-const blurScript = `(() => { if (document.activeElement) { document.activeElement.blur(); } window.scrollTo(0, 0); return true; })()`
+const blurScript = `(() => { if (document.activeElement) { document.activeElement.blur(); } window.scrollTo(0, 0); return JSON.stringify(true); })()`
 
 func requireMenuTests(t *testing.T) {
 	t.Helper()

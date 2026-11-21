@@ -382,7 +382,7 @@ steps_table() {
 }
 
 failure_lines() {
-  grep -E -- '^ *--- FAIL|^FAIL|rc=[1-9][0-9]*$|timed out|checksum mismatch|did not' "$1" | head -40
+  grep -E -- '^ *--- FAIL|^FAIL|_test\.go:[0-9]+:|rc=[1-9][0-9]*$|timed out|checksum mismatch|did not' "$1" | head -60
 }
 
 failure_section() {
