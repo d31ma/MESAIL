@@ -48,6 +48,8 @@ wait_for_listing() {
 
 main() {
   mesail_load_settings
+  mesail_load_secrets
+  mesail_load_compose_settings
   export MESAIL_RELAY_SINK_PORT="${MESAIL_RELAY_SINK_PORT:-$(mesail_stack .relaySink.listingPort)}"
   export MESAIL_RELAY_SINK_REFUSED_LOCAL_PART="${MESAIL_RELAY_SINK_REFUSED_LOCAL_PART:-$(mesail_stack .relaySink.refusedLocalPart)}"
   MESAIL_RELAY_SINK_DKIM_RECORDS="$(dkim_records)"
