@@ -369,13 +369,17 @@ own_images() {
   docker images --format '{{.Repository}}:{{.Tag}}' | grep -E ":$(image_tag)\$"
 }
 
+remove_image() {
+  if docker rmi "$1" > /dev/null 2>&1; then echo "removed $1"; return; fi
+  echo "kept $1: a container still uses it (never forced; the dev host owner lists it for cleanup)"
+}
+
 remove_own_images() {
   local image
   eval "$("$HOME/.local/bin/mesail-devhost" env)" || return 1
   for image in $(own_images); do
-    docker rmi "$image" || return 1
+    remove_image "$image"
   done
-  echo "removed the :$(image_tag) images"
 }
 
 floci_steps() {
