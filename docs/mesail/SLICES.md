@@ -1763,6 +1763,16 @@ except for the items below.
     `mail-out`, and as a plain volume for the router (`/blobs`) and the
     SMTP edge (`MESAIL_RAW_STORE_DIR`); all use the local adapter. L5's
     shared EFS access point for the Floci test run is the start of it;
+  - **test settings never reach production** (2026-11-21):
+    `deploy/floci/stack.json` is the Floci TEST stack (the dev host and
+    Colima; `scripts/floci/**` only). It holds test-only values: mail-out's
+    relay to K34's sink (`127.0.0.1:12526`, no TLS, the `relay-sink`
+    forward), the 3000 sign-in rate limit, test people and domains, OP8's
+    `captureSteps` and `captureVolume`, and generated secrets. The
+    production definition is its own file (or a production base that the
+    test stack extends with a test-only overlay); it never reads
+    `stack.json`, and a check in the gate fails when a production file
+    names `relay-sink`, port 12526, `captureSteps` or a test person;
   - DKIM keys for real domains: `scripts/onprem/dkim-key.sh <domain>`
     makes a key pair for a hosted domain, writes the private key as a
     secret file that `mail-out` reads (`MESAIL_SECRET_*`), and prints the
@@ -3275,6 +3285,8 @@ year (K31), most of it attachments and raw mail.
   OPERATIONS.md says how to set the retention and how much space it frees.
 
 ### K33. Blackbox flow tests for the flows MSL-INT cannot prove yet (release blocker, about 6-10 hours)
+**Done** (develop 38d93ef5): 33 `TestFlow*` tests, 32 pass; 1 stays red
+until K36 (`TestFlowMailOutToAnUnknownMailboxInAHostedDomainIsReportedBounced`).
 MSL-INT (the integration run of Mesail `develop` against DuVay, TACHYON
 and FYLO `develop`) found that `tests/blackbox/` has no flow tests for six
 flows; only `Health_test.go` names them. Brief: `k33-brief.md` in the
@@ -3295,6 +3307,12 @@ MESAIL Build Coordinator's notes.
   each failure is a reported bug.
 
 ### K34. SMTP sink for outside mail in the Floci test stack (release blocker, about 3-4 hours)
+**Done** (develop 9f5f6bb4), with two changes to the text below: the sink
+has its own `tests/relaysink/Dockerfile` (not a target in the repository
+`Dockerfile`, so the production `Dockerfile` never names it), and the sink
+checks DKIM itself with `kit/mailauth`, so `tests/blackbox` gets no `kit`
+dependency. `deploy/floci/stack.json` sends mail-out's relay to the sink
+(`127.0.0.1:12526`, no TLS); that file is the test stack only (OP2).
 In the Floci stack `mail-out` has no relay (`relayaddress: ""`) and the
 SMTP edge is inbound only, so mail to an outside address can only reach
 `deferred`, and K33 cannot prove "email out" or a bounce reported back.
@@ -3426,11 +3444,10 @@ Release blockers:
   (OPERATIONS.md section 7.4) is accepted through the hub.
 - **K36:** a hand-off to an unknown mailbox in another hosted domain is
   reported `bounced`, not `sent` (found by K33).
-- **K34:** mail out to an outside address is proven against an SMTP sink
-  in the Floci test stack (the release smoke test needs "email out").
-- **K33:** blackbox flow tests for TOTP sign-in, mail out through the
-  SMTP edge, notify, devicebox, realtime and the scheduled jobs pass (or
-  each failure is a reported bug) before the coordinated release.
+- **K34:** done (develop 9f5f6bb4): mail out to an outside address is
+  proven against the test stack's SMTP sink.
+- **K33:** done (develop 38d93ef5): 32 of 33 flow tests pass; the last
+  one waits for K36.
 - **Dependencies tested on their `develop` (the release rule):** Mesail
   tests each dependency's `develop` build before that dependency's release,
   then moves to the release:
