@@ -311,7 +311,7 @@ backup plan (`plat-atlas-backup-plan.md` in the hub's notes), and
 | --- | --- | --- |
 | FYLO roots | one folder per service (and domain) in the Mesail-only area on ATLAS (subvolume `/mnt/atlas-pool/MESAIL`, NFS export `mesail`), mounted as the function's `/mnt/data` | FYLO network roots with leases (FYLO's next release) |
 | Files (attachments, backups, raw mail) | the blob folder in the same Mesail-only area | plain files named by `blobKey` and `rawBlobKey`; not FYLO file records |
-| Keycloak | the SQLite file in `MESAIL_KEYCLOAK_DATA`, on the VM's own disk | SQLite does not support network file systems. A copy made with `sqlite3 <file> ".backup <copy>"` is written into the shared folder before each snapshot, so the snapshot holds a consistent copy |
+| Keycloak | the SQLite file in `MESAIL_KEYCLOAK_DATA`, on the VM's own disk | SQLite does not support network file systems. A copy made with `sqlite3 <file> ".backup <copy>"` is written into the Mesail-only area before EACH hourly snapshot, so every snapshot holds a consistent copy and Keycloak's restore point is never older than one hour |
 | Secrets | the host's secret files | their own backup, kept apart from the data |
 
 Development and tests never touch ATLAS (the dev host's data disk and
@@ -427,9 +427,8 @@ If a check fails, Platform puts back the data kept before the restore.
 - The `async` export can lose the last seconds of writes (7.2).
 - The HAVEN copy reaches HAVEN's limits in about 20 months without a
   retention rule (PLAT-19).
-- History: the ATLAS SSD with read errors was replaced and verified on
-  2026-11-17 (btrfs replace, clean scrubs, error counters 0); no SMART
-  data through the USB bridge.
+- History: the ATLAS SSD with read errors was replaced and verified
+  2026-11-17.
 
 ## 8. Checks
 

@@ -3167,7 +3167,8 @@ tested restore.
   folders on Mesail's ATLAS subvolume and one snapshot holds both.
   Keycloak's SQLite file stays on the VM's own disk (SQLite does not
   support network file systems); a `sqlite3 ".backup"` copy is written
-  into the subvolume before each snapshot. The slice also checks that
+  into the subvolume before EACH hourly snapshot, so Keycloak's restore
+  point is never older than one hour. K31 owns this copy job. The slice also checks that
   Mesail writes and syncs a file before the FYLO record that names it, so
   a snapshot never has a record without its file (an orphan file without a
   record is harmless and shows in the attachments orphan report).
