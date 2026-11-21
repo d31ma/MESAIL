@@ -1,0 +1,15 @@
+sign-in with a password	^TestAcId9
+sign-in with a 2-step code (TOTP)	
+People admin	^TestAcId1[23]
+Domains admin	^TestAcId(3Neither|12Added|4And12)
+messaging: send, edit, delete, reactions, read state	^TestAc(Of8|Ms|Of4)
+mail in through the SMTP edge	^TestAcIn
+mail out through the SMTP edge (delivery)	
+cross-domain delivery	^TestAcDm6
+attachments	^TestOp7
+notify	
+search	^TestAcSr
+devicebox	
+realtime	
+scheduled job: removals	^Test(K6|D2)
+scheduled jobs: relay, mail-out delivery, notify jobs, daily jobs	

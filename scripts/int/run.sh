@@ -398,6 +398,35 @@ failure_section() {
   done < "$STEPS_FILE"
 }
 
+flows_file() {
+  echo "$(cd "$(dirname "$0")" && pwd)/flows.tsv"
+}
+
+blackbox_log() {
+  echo "$RUN_LOGS/floci/blackbox.log"
+}
+
+flow_result() {
+  local pattern="$1" passed failed
+  [ -n "$pattern" ] || { echo "not covered (no blackbox test yet)"; return; }
+  [ -f "$(blackbox_log)" ] || { echo "not run"; return; }
+  passed="$(sed -n 's/^ *--- PASS: \([A-Za-z0-9_]*\).*/\1/p' "$(blackbox_log)" | grep -cE "$pattern")"
+  failed="$(sed -n 's/^ *--- FAIL: \([A-Za-z0-9_]*\).*/\1/p' "$(blackbox_log)" | grep -cE "$pattern")"
+  [ "$failed" = 0 ] || { echo "FAIL ($failed failed, $passed passed)"; return; }
+  [ "$passed" != 0 ] || { echo "not run (no test matched $pattern)"; return; }
+  echo "pass ($passed tests)"
+}
+
+coverage_section() {
+  local flow pattern
+  echo "## Flows on the dev host (Floci blackbox)"
+  echo "| flow | result | tests |"
+  echo "| --- | --- | --- |"
+  while IFS="$(printf '\t')" read -r flow pattern; do
+    echo "| $flow | $(flow_result "$pattern") | \`${pattern:--}\` |"
+  done < "$(flows_file)"
+}
+
 run_result() {
   if awk -F '\t' '$2 != 0 { found = 1 } END { exit !found }' "$STEPS_FILE"; then echo RED; return; fi
   echo GREEN
@@ -412,6 +441,7 @@ write_summary() {
     echo "## Machine at start"
     echo "$MACHINE_AT_START"
     steps_table
+    coverage_section
     failure_section
   } > "$summary"
   echo "=== summary: $summary"
