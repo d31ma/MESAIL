@@ -281,8 +281,17 @@ native_gates() {
   cd "$WORKTREE" && heavy --needs-screen -- "$WORKTREE/scripts/gates.sh" --all
 }
 
+needs_screen() {
+  case "$1" in
+    web | web-admin) return 0 ;;
+  esac
+  return 1
+}
+
 native_app_gates() {
-  cd "$WORKTREE" && heavy --needs-screen -- "$WORKTREE/scripts/gates.sh" --apps-only --app "$1"
+  cd "$WORKTREE" || return 1
+  if needs_screen "$1"; then heavy --needs-screen -- "$WORKTREE/scripts/gates.sh" --apps-only --app "$1"; return; fi
+  heavy -- "$WORKTREE/scripts/gates.sh" --apps-only --app "$1"
 }
 
 native_steps() {
