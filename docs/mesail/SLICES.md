@@ -3193,6 +3193,13 @@ tested restore.
   of daily snapshots. The blobs (attachments and raw mail) are about 80%
   of it. Measure the real numbers in the first month of production and
   update PLAT-19.
+- **ATLAS space (Platform, 2026-11-21):** ATLAS has 236 GiB, 143 GiB
+  free (kestrel's FitNest and K3s use 89 GiB). At about 12 GB a month,
+  Mesail fills it in about 10 months without a retention rule, sooner with
+  snapshots. A raw VM disk file changes in large blocks, so the nightly
+  incremental copy may be bigger than the estimate above; PLAT-19
+  measures it. The space decision is a release blocker ("Open before the
+  production release").
 - **Restore runbook** in OPERATIONS.md section 7 (FYLO's steps):
   1. stop every writer of that root first (never restore under a running
      owner: `scripts/floci/writers.sh` or the production equivalent);
@@ -3222,7 +3229,10 @@ deletes old mail yet. Only `messaging`'s own `changes` log has a retention
 year (K31), most of it attachments and raw mail.
 - **Rule:** a domain with no retention set keeps everything (today's
   behaviour). A default retention for every domain is a user decision,
-  raised through the hub; this slice does not set one.
+  raised through the hub; this slice does not set one. It is one of the
+  answers to the ATLAS space blocker ("Open before the production
+  release"): if the user chooses retention, K32 must be done before
+  go-live.
 - **Whole months:** the large collections are already split by month
   (`messages`, `deliveries`, `search-index`, `notifications`,
   `inbound-content`; DOMAIN.md "FYLO layout"). So a daily job per domain
@@ -3267,6 +3277,13 @@ Release blockers:
 - **Backups and restore (K31):** ATLAS keeps the `async` export (the
   user, 2026-11-21: "keep the fast `async` mode"), so scheduled backups,
   the restore runbook and one restore drill must be done first.
+- **ATLAS space:** at about 10 people (about 12 GB a month) Mesail fills
+  ATLAS's 143 GiB free in about 10 months without retention (K31). Before
+  go-live the user decides, through the hub, one or more of: a retention
+  rule (delete mail and attachments after N months, K32), bigger ATLAS
+  disks, or the blobs (attachments and raw mail) outside ATLAS. Decide with
+  PLAT-19's numbers, and check the choice again with the first production
+  month's real numbers.
 - **Dependencies tested on their `develop` (the release rule):** Mesail
   tests each dependency's `develop` build before that dependency's release,
   then moves to the release:
