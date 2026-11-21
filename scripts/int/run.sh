@@ -340,6 +340,10 @@ image_tag() {
   echo "$RUN_ID" | tr -cd 'a-z0-9-'
 }
 
+blackbox_timeout() {
+  echo 45m
+}
+
 slow_test_count() {
   echo 200
 }
@@ -354,6 +358,8 @@ floci_settings() {
   export MESAIL_INT_KEEP_STACK="$KEEP_STACK"
   export MESAIL_OWNER=msl-int MESAIL_LOG_DIR="$RUN_LOGS/floci" MESAIL_IMAGE_TAG MESAIL_NO_PRUNE=1
   if [ -n "${FLOCI_TESTS:-}" ]; then export MESAIL_TEST_RUN="$FLOCI_TESTS"; fi
+  GOFLAGS="${GOFLAGS:+$GOFLAGS }-timeout=$(blackbox_timeout)"
+  export GOFLAGS
   use_slow_tests
   mkdir -p "$MESAIL_LOG_DIR"
 }
@@ -482,6 +488,36 @@ flow_result() {
   echo "pass ($passed tests)"
 }
 
+known_file() {
+  echo "${MESAIL_INT_KNOWN:-$(cd "$(dirname "$0")" && pwd)/known.tsv}"
+}
+
+failed_tests() {
+  sed -n 's/^ *--- FAIL: \([A-Za-z0-9_]*\).*/\1/p' "$(blackbox_log)" | sort -u
+}
+
+known_reason() {
+  awk -F '\t' -v name="$1" '$1 == name { print $2 }' "$(known_file)"
+}
+
+failed_test_line() {
+  local reason
+  reason="$(known_reason "$1")"
+  if [ -n "$reason" ]; then echo "- $1: known bug, $reason"; return; fi
+  echo "- $1: NEW (not in scripts/int/known.tsv)"
+}
+
+failed_section() {
+  local name
+  wanted_step floci || return 0
+  [ -f "$(blackbox_log)" ] || return 0
+  echo "## Failed blackbox tests"
+  for name in $(failed_tests); do
+    failed_test_line "$name"
+  done
+  [ -n "$(failed_tests)" ] || echo "none"
+}
+
 skipped_tests() {
   awk '/\.go:[0-9]+: / { reason = $0; sub(/^ *[A-Za-z0-9_]*\.go:[0-9]+: /, "", reason) } /^ *--- SKIP: / { print "- " $3 ": " reason; reason = "" }' "$(blackbox_log)"
 }
@@ -538,6 +574,7 @@ write_summary() {
     echo "$MACHINE_AT_START"
     steps_table
     coverage_section
+    failed_section
     skipped_section
     failure_section
   } > "$summary"
