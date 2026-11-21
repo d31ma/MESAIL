@@ -3189,19 +3189,47 @@ tested restore.
   update PLAT-19.
 - **ATLAS space (Platform, 2026-11-21):** ATLAS has 236 GiB, 143 GiB
   free (kestrel's FitNest and K3s use 89 GiB). At about 12 GB a month,
-  Mesail fills it in about 10 months without a retention rule, sooner with
-  snapshots. A raw VM disk file changes in large blocks, so the nightly
+  Mesail fills it in about 10 to 11 months without a retention rule,
+  sooner with snapshots. So if the user chooses retention, K32 must run
+  in production before month 7. A raw VM disk file changes in large blocks, so the nightly
   incremental copy may be bigger than the estimate above; PLAT-19
   measures it. The space decision is a release blocker ("Open before the
   production release").
+- **Writers of a root** (`k31-plat19-restore-answers.md` in the MESAIL
+  Build Coordinator's notes): the app's Lambda containers
+  (`floci-aws-mesail-<service>-*`) or the `realtime` container. New ones
+  start from user requests and other apps' outbox pushes (both through the
+  router), from three schedulers (`scheduler`, `scheduler-daily` and the
+  in-function `@Schedule` workers of K27) and from the SMTP edge. So
+  stopping the containers alone is not enough. The first runbook stops the
+  whole stack: `docker compose stop router smtp scheduler scheduler-daily
+  realtime` (never `rm`), then `docker stop` every `floci-aws-mesail-*`
+  container, and checks that none is left and no `fylo` runs. Outbox items
+  wait and are pushed again after the start. Stopping ONE app while the
+  rest runs needs Lambda concurrency 0 (not tested on Floci 2.4.0) or a
+  router list of paused functions; the slice tests one of them.
+- **Files are not FYLO file records:** attachments, backups and raw mail
+  are plain files in the shared blob folder, named by `blobKey` or
+  `rawBlobKey` in `attachments/attachments`, `attachments/backups`,
+  `mail-in/inbound-raw` and `mail-out/outbound-queue`. So `fylo verify`
+  (EFILELINK) does not check them; the slice adds a Mesail check that
+  every named file exists and matches the document's `sha256` or `size`.
 - **Restore runbook** in OPERATIONS.md section 7 (FYLO's steps):
   1. stop every writer of that root first (never restore under a running
-     owner: `scripts/floci/writers.sh` or the production equivalent);
+     owner; see "Writers of a root");
   2. restore the root (and Keycloak and the files from the same snapshot)
-     with Platform's restore command;
+     with Platform's restore command. For ONE document, never copy its
+     files by hand (FYLO layout spec section 20.6: that skips the version
+     history, the indexes and the lease checks): use `fylo restore-doc`,
+     which writes it as a new version through the engine, reading from a
+     read-only mount of the snapshot. A document that names a blob file is
+     restored together with that file from the SAME snapshot, the file
+     first (a plain copy with Platform's `plat-atlas-restore copy`);
   3. open the root normally, so FYLO's recovery runs: unfinished
      transactions roll back and indexes rebuild;
-  4. run `fylo verify --root <root>`;
+  4. run `fylo verify --root <root>` (it also reports broken links
+     between FYLO documents and FYLO file records as EFILELINK) and
+     Mesail's blob check;
   5. run `rebuildCollection` only for the collections that verify reports;
   6. start the writers again. The restored lease names an old owner, so the
      first new owner takes over after 20 s, or at once on the same machine
@@ -3225,8 +3253,9 @@ year (K31), most of it attachments and raw mail.
   behaviour). A default retention for every domain is a user decision,
   raised through the hub; this slice does not set one. It is one of the
   answers to the ATLAS space blocker ("Open before the production
-  release"): if the user chooses retention, K32 must be done before
-  go-live.
+  release"): if the user chooses retention, K32 must run in production
+  before month 7 (ATLAS is full in about 10 to 11 months at about 10
+  people); do it before go-live when possible.
 - **Whole months:** the large collections are already split by month
   (`messages`, `deliveries`, `search-index`, `notifications`,
   `inbound-content`; DOMAIN.md "FYLO layout"). So a daily job per domain
@@ -3277,7 +3306,17 @@ Release blockers:
   rule (delete mail and attachments after N months, K32), bigger ATLAS
   disks, or the blobs (attachments and raw mail) outside ATLAS. Decide with
   PLAT-19's numbers, and check the choice again with the first production
-  month's real numbers.
+  month's real numbers. With retention, K32 runs before month 7.
+- **ATLAS mirror health:** one of ATLAS's two mirrored SSDs was flagged
+  faulty on 2026-11-15 and was back in the mirror with 24 read errors on
+  2026-11-17 (Platform; urgent at the hub). It must be settled (the disk
+  checked or replaced, and the mirror scrubbed clean) before production
+  data goes on ATLAS.
+- **Storage form on ATLAS (with the user):** FYLO folders directly on
+  ATLAS (PLAT-19's and the coordinator's lean: space reuse and fast
+  restores; needs FYLO's network roots) or one VM disk file (ADR 0004
+  today). If folders are chosen, ADR 0004 "Where live roots live" and
+  ADR 0007's EFS row are amended.
 - **Dependencies tested on their `develop` (the release rule):** Mesail
   tests each dependency's `develop` build before that dependency's release,
   then moves to the release:
