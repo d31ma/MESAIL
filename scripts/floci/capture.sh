@@ -47,7 +47,7 @@ stop_callers() {
   local profile
   profile="$(used_profile)"
   # shellcheck disable=SC2086
-  compose $profile stop scheduler scheduler-daily
+  compose $profile stop scheduler scheduler-daily scheduler-fast
 }
 
 stop_app() {
@@ -213,7 +213,7 @@ start_callers() {
   local profile
   profile="$(used_profile)"
   # shellcheck disable=SC2086
-  compose $profile start scheduler scheduler-daily
+  compose $profile start scheduler scheduler-daily scheduler-fast
 }
 
 capture() {

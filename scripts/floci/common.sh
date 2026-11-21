@@ -122,13 +122,16 @@ mesail_directory_setting() {
 
 mesail_load_compose_settings() {
   MESAIL_SINGLE_WRITERS="$(mesail_single_writers)"
-  MESAIL_SCHEDULER_PATHS="$(mesail_stack '[.schedules[] | select(.daily | not) | .path] | join(",")')"
+  MESAIL_SCHEDULER_PATHS="$(mesail_stack '[.schedules[] | select((.daily | not) and (.fast | not)) | .path] | join(",")')"
   MESAIL_DAILY_SCHEDULER_PATHS="$(mesail_stack '[.schedules[] | select(.daily) | .path] | join(",")')"
+  MESAIL_FAST_SCHEDULER_PATHS="$(mesail_stack '[.schedules[] | select(.fast) | .path] | join(",")')"
   MESAIL_SCHEDULER_SECONDS="$(mesail_stack .scheduleSeconds)"
+  MESAIL_FAST_SCHEDULER_SECONDS="$(mesail_stack .fastScheduleSeconds)"
   MESAIL_DEV_DNS_DOMAINS="$(mesail_stack '.hostedDomains | join(",")')"
   MESAIL_DEV_DNS_MAIL_HOST="$(mesail_directory_setting mailhost)"
   MESAIL_DEV_DNS_SPF="$(mesail_directory_setting spfmechanism)"
   export MESAIL_SINGLE_WRITERS MESAIL_SCHEDULER_PATHS MESAIL_DAILY_SCHEDULER_PATHS MESAIL_SCHEDULER_SECONDS
+  export MESAIL_FAST_SCHEDULER_PATHS MESAIL_FAST_SCHEDULER_SECONDS
   export MESAIL_DEV_DNS_DOMAINS MESAIL_DEV_DNS_MAIL_HOST MESAIL_DEV_DNS_SPF
   export MESAIL_ROUTER_RATE_LIMIT="${MESAIL_ROUTER_RATE_LIMIT:-$(mesail_stack .routerRateLimit)}"
 }

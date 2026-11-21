@@ -156,7 +156,7 @@ capture_test_capture_before_retry() {
   if grep 'mesail-op8-capture:/mnt/data' "$work/calls.log" | grep -q 'floci-aws-efs'; then capture_test_fail "separate mounts" "one container mounts both"; fi
   echo "ok   no container mounts both volumes"
   capture_test_expect_contains "marker checked before the copy" "marker mesail-op8-capture" "$work/calls.log"
-  capture_test_expect_contains "scheduler started again" "start scheduler scheduler-daily" "$work/calls.log"
+  capture_test_expect_contains "scheduler started again" "start scheduler scheduler-daily scheduler-fast" "$work/calls.log"
   if grep -q 'mail-in' "$work/calls.log"; then capture_test_fail "only the app's containers" "a mail-in container was touched"; fi
   if grep -q 'hidden' "$work/seed.log" "$folder/timing.txt"; then capture_test_fail "no FYLO values in logs" "a FYLO_ value was written"; fi
   if grep -q -E '^docker (rm|volume rm|compose .* (down|rm))' "$work/calls.log"; then capture_test_fail "never removes" "a remove command ran"; fi

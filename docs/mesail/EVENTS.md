@@ -254,9 +254,11 @@ outbound delivery queue, retries, email summaries, cleanup):
      (`deploy/lambda/write-profile.sh`) sets `"workers": {"enabled": false}`,
      which makes the worker return before any call (slice K27). Otherwise
      each job would run twice, and the worker's call on the local origin
-     would skip the router's one-writer gate. So in Lambda form mail-out's
-     delivery and notify's jobs move from their workers' 30 s to the
-     scheduler's 60 s ticks (with the `more: true` repeats of item 5).
+     would skip the router's one-writer gate. The routes of the two 30 s
+     workers (mail-out's delivery and relay, notify's jobs and relay) keep
+     30 s in Lambda form through a third scheduler container,
+     `scheduler-fast` (`"fast": true` in `stack.json`), because a send only
+     queues an email and its delivery waits for the next call.
      realtime runs as a container, not a Lambda, and keeps its 15 s
      worker.
 3. **Drain on write** stays: a producing route calls `RelayDocument` right

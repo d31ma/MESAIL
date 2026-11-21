@@ -14,9 +14,12 @@
   mail-in, mail-out, messaging x2, notify) run their work through the new
   kit package `scheduling` (`WorkerSwitch`), which returns at once when the
   setting is `false`. Native `ty start`, the tests and realtime's
-  `container` profile run the workers as before. In Lambda form mail-out's
-  delivery and notify's jobs now run at the scheduler's 60 s ticks instead
-  of every 30 s. `tests/workers` checks the profile file and that every
+  `container` profile run the workers as before. So that mail-out's
+  delivery and notify's jobs keep their 30 s in Lambda form, the Floci stack
+  gets a third scheduler container, `scheduler-fast` (`fastScheduleSeconds`
+  30, routes marked `"fast": true` in `stack.json`); the main scheduler
+  skips those routes, and `scripts/floci/capture.sh` stops and starts all
+  three schedulers. `tests/workers` checks the profile file and that every
   Lambda worker uses the switch.
 
 - The FYLO test image moved from ATLAS to the local HANGAR SSD (slice K25).

@@ -613,10 +613,14 @@ cannot read `YON_PROFILE` itself: TACHYON reserves that name and starts
 handlers with a cleared environment.) Before K27 these workers called their
 routes on the local origin, so each job ran twice and the worker's call
 skipped the router's one-writer gate. Native `ty start`, the tests and the
-`container` profile (realtime) keep their workers. Because of this,
-mail-out's delivery and notify's jobs run at the scheduler's 60 s ticks in
-Lambda form, not every 30 s as their workers do, with the `more: true`
-repeats below.
+`container` profile (realtime) keep their workers. The routes that the
+30 s workers called (mail-out's `/jobs/deliver` and `/outbox/relay`,
+notify's `/jobs/run` and `/outbox/relay`) keep 30 s in Lambda form: they
+have `"fast": true` in `stack.json` `schedules` and go to the third
+container `scheduler-fast` (same image, ticks of `fastScheduleSeconds`,
+30; it repeats a `more: true` route for up to 20 s). A send only queues the
+email in mail-out (no drain on write starts a delivery), so with 60 s ticks
+a cross-domain email would wait up to a minute.
 
 The `scheduler` container
 (`Dockerfile` target `scheduler`, `deploy/lambda/scheduler.sh` on a pinned
@@ -637,6 +641,9 @@ per route (`calls this tick: <path>=<n> ...`). The next tick starts
 scheduler's 10 s ticks repeat for 5 s. When it gets no token (the stack is
 still starting), it tries again after the tick, or after 60 s when the tick
 is longer.
+
+A schedule with `"fast": true` goes to `scheduler-fast` instead (above);
+the main `scheduler` calls neither fast nor daily routes.
 
 A schedule with `"daily": true` goes to the second container,
 `scheduler-daily` (same image, ticks of 86,400 s): today only messaging's
