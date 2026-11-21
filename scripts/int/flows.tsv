@@ -4,8 +4,8 @@ People admin	^TestAcId1[23]
 Domains admin	^TestAcId(3Neither|12Added|4And12)
 messaging: send, edit, delete, reactions, read state	^TestAc(Of8|Ms|Of4)
 mail in through the SMTP edge	^TestAcIn
-mail out to another hosted domain, bounces and deferral (SMTP edge)	^TestFlowMailOut
-mail out to an outside address through a relay (K34 sink)	
+mail out to another hosted domain, bounces and deferral (SMTP edge)	^TestFlowMailOutTo
+mail out to an outside address through a relay (K34 sink)	^TestFlowMailOutRelay
 cross-domain delivery	^TestAcDm6
 attachments	^TestOp7
 notify	^TestFlowNotify

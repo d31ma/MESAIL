@@ -436,14 +436,21 @@ blackbox_log() {
   echo "$RUN_LOGS/floci/blackbox.log"
 }
 
+count_results() {
+  sed -n "s/^ *--- $1: \\([A-Za-z0-9_]*\\).*/\\1/p" "$(blackbox_log)" | grep -cE "$2"
+}
+
 flow_result() {
-  local pattern="$1" passed failed
+  local pattern="$1" passed failed skipped
   [ -n "$pattern" ] || { echo "not covered (no blackbox test yet)"; return; }
   [ -f "$(blackbox_log)" ] || { echo "not run"; return; }
-  passed="$(sed -n 's/^ *--- PASS: \([A-Za-z0-9_]*\).*/\1/p' "$(blackbox_log)" | grep -cE "$pattern")"
-  failed="$(sed -n 's/^ *--- FAIL: \([A-Za-z0-9_]*\).*/\1/p' "$(blackbox_log)" | grep -cE "$pattern")"
+  passed="$(count_results PASS "$pattern")"
+  failed="$(count_results FAIL "$pattern")"
+  skipped="$(count_results SKIP "$pattern")"
   [ "$failed" = 0 ] || { echo "FAIL ($failed failed, $passed passed)"; return; }
+  [ "$passed" != 0 ] || [ "$skipped" = 0 ] || { echo "skipped ($skipped tests; see the blackbox log for why)"; return; }
   [ "$passed" != 0 ] || { echo "not run (no test matched $pattern)"; return; }
+  [ "$skipped" = 0 ] || { echo "pass ($passed tests, $skipped skipped)"; return; }
   echo "pass ($passed tests)"
 }
 

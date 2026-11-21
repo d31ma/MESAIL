@@ -93,6 +93,11 @@ finish() {
   exit "$code"
 }
 
+start_relay_sink() {
+  if [ ! -x "$(floci_folder)/relay-sink.sh" ]; then echo "no scripts/floci/relay-sink.sh in this Mesail commit (MSL-K34); outside mail is not tested"; return 0; fi
+  "$(floci_folder)/relay-sink.sh"
+}
+
 start_writer_guard() {
   "$(floci_folder)/writers.sh" watch 5 >> "$(mesail_log_dir)/writers.log" 2>&1 &
   MESAIL_WRITER_GUARD=$!
@@ -111,6 +116,7 @@ main() {
   "$(floci_folder)/up.sh"
   "$(floci_folder)/deploy.sh"
   "$(floci_folder)/blobs.sh"
+  start_relay_sink
   start_writer_guard
   "$(floci_folder)/test.sh"
 }
