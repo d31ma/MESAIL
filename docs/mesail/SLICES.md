@@ -3434,9 +3434,31 @@ Coordinator's notes).
   one-collection "AllOrNothing" call from Go handlers: several puts,
   saves and deletes to ONE collection as one FYLO Store transaction, all
   or nothing. Transactions across collections are not planned (FYLO
-  api/store/v1, ADR 0035). The exact Go call (name, arguments, most
-  operations, conflict error) comes from TAC-FY2 through the MESAIL Build
-  Coordinator; use that, never a guess.
+  api/store/v1, ADR 0035).
+- **How** (TAC-FY2's call shape, `k38-tachyon-transactions.md` in the
+  MESAIL Build Coordinator's notes; check it against the TACHYON release):
+  - `DataSource.Command` with `{"operation":"transaction","action":"begin"}`,
+    then document `insert`, `patch` or `deleteById` commands with
+    `"transaction":<id>`, then `commit`; a deferred `rollback` on every
+    path. The typed `Insert`/`Patch` helpers take no transaction, and
+    `@AllOrNothing` does not join them, so Mesail's data source gets one
+    small transaction helper (one place, not copied per app);
+  - the first write fixes the collection; a write to another collection
+    rolls everything back. At most 1,000 writes and 8 MiB;
+  - no `createCollection` or `dropCollection` inside: a new monthly
+    collection is created (and registered) before `begin`. Mesail's
+    outbox is staged fields plus HTTP pushes, not FYLO queue operations,
+    so it fits inside; nothing queue-based is used;
+  - the transaction must commit within one handler answer (the store
+    budget, 5 s by default, at most 10 s). Each FYLO function runs one call
+    at a time, so the limit of 4 open transactions per server is never
+    reached;
+  - Go sees any failure only as `YonResourceError` with no code. So any
+    error means "nothing in this transaction was written": the action
+    stops and answers as today (a retryable `503` for a request; the
+    event is redelivered for a consumer), and the earlier transactions
+    of the action are completed by that retry (the ordering rule below);
+  - reads inside use `"transaction":<id>` to see their own writes.
 - **Blocked until** TAC-FY2 is in a TACHYON release Mesail pins, and FYLO
   says how a transaction of N writes costs on ATLAS (about one commit, or
   about N). If it costs about N, K38 brings little and stays backlog.
