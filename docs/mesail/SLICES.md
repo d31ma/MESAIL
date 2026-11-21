@@ -14,15 +14,17 @@ edits nothing else.
 Paths (renamed 2026-11-15, MSL-REN): the repository is `d31ma/MESAIL`, the
 HAVEN checkout `/Volumes/HAVEN/Repositories/DELMA/MESAIL` (no reads, writes
 or git there during development: since 2026-11-21 HAVEN and ATLAS are for
-production only, and testing, builds and worktrees use ANVIL or HANGAR),
+production only; worktrees and builds are on ANVIL, and VMs, their virtual
+disks and the FYLO test image are on HANGAR),
 the shared clone
 `~/Developer/AnvilTargets/git/MESAIL` (a full clone; never `git gc` or
-`git worktree prune` it), worktrees `/Volumes/HANGAR/work/MESAIL/<name>`
-(since 2026-11-21, Platform's rule; `~/Developer/Worktrees/MESAIL` before:
-the git data stays in the shared clone, build output goes to
+`git worktree prune` it), worktrees
+`~/Developer/AnvilTargets/work/MESAIL/<name>` on ANVIL (since 2026-11-21,
+the user's rule; `~/Developer/Worktrees/MESAIL` before: the git data stays
+in the shared clone, build output goes to
 `~/Developer/AnvilTargets/targets/<name>`, a branch is pushed at every step
-and at least hourly, a worktree is removed at its merge, and all Mesail
-worktrees together stay under 15 GiB) and logs `~/Library/Logs/local/MESAIL`. The old `CADUCEUS` paths are links
+and at least hourly, and a worktree is removed at its merge) and logs
+`~/Library/Logs/local/MESAIL`. The old `CADUCEUS` paths are links
 to these. The lock name `caduceus-build` did not change. Owned file sets never overlap, so slices of the same
 wave run at the same time.
 
