@@ -60,9 +60,9 @@ func (service *MessageCreatedService) callWriteLimit() int {
 }
 
 func (service *MessageCreatedService) notificationWriteLimit() int {
-	return 20
+	return 19
 }
 
 func (service *MessageCreatedService) reservedWrites() int {
-	return 2
+	return 4
 }

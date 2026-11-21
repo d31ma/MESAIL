@@ -26,7 +26,8 @@ func (factory DeskFactory) Desk(documents Documents) Desk {
 	outboxSettings, err := outbox.SettingsReader{}.FromApplicationJSON(factory.Environment(factory.variable()))
 	dialer, dialErr := smtpclient.ProxyDialers{}.FromEnvironment()
 	authorize := factory.tokens(settings).Authorization
-	store := DocumentStore{Documents: documents}
+	writes := NewWriteCounter(documents)
+	store := DocumentStore{Documents: writes}
 	registry := Registry{Store: store}
 	client := ServiceClient{Client: transport.SingleUseTransport{}.Client(settings.Timeout()), Authorize: authorize}
 	directory := Directory{Client: client, BaseUrl: settings.DirectoryUrl}
@@ -43,7 +44,7 @@ func (factory DeskFactory) Desk(documents Documents) Desk {
 	intake := Intake{Queue: queue, Relayer: relayer, Sources: sources, Settings: settings, Changes: changes, Now: time.Now}
 	return Desk{
 		Gate: oidc.Configured(), Seen: SeenEvents{Store: store, Now: time.Now}, Intake: intake,
-		Run: QueueRun{Registry: registry, Queue: queue, Delivery: delivery, Batch: 50}, Relayer: relayer, Now: time.Now, Limit: 100,
+		Run: QueueRun{Registry: registry, Queue: queue, Delivery: delivery, Writes: writes, Batch: 50, Clock: time.Now}, Relayer: relayer, Now: time.Now, Limit: 100,
 		Failure: errors.Join(settingsErr, err, dialErr),
 	}
 }

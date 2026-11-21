@@ -1,5 +1,7 @@
 import (
+	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -140,9 +142,71 @@ func (test *MessageCreatedServiceTest) TestApplySpillsRecipientsBeyondTheBudgetA
 	waiting, _ := test.queue().Waiting(domainId, 10)
 	progress, processFailure := test.fanout().Process(domainId, 25)
 	Assert.IsTrue(err == nil && processFailure == nil, "apply failed")
-	Assert.Equals(20, written)
+	Assert.Equals(19, written)
 	Assert.Equals(1, len(waiting))
-	Assert.Equals(4, len(waiting[0].Recipients))
-	Assert.Equals(JobProgress{Written: 5, Done: 1, More: false}, progress)
+	Assert.Equals(5, len(waiting[0].Recipients))
+	Assert.Equals(JobProgress{Written: 6, Done: 1, More: false}, progress)
 	Assert.Equals(24, len(test.kinds(domainId, "msg_1")))
+}
+
+func (test *MessageCreatedServiceTest) channelMessage(messageId string, readers int) events.MessageCreated {
+	message := test.message(messageId, "member-0", 0)
+	message.MentionedMemberIds = test.members(readers)
+	return message
+}
+
+func (test *MessageCreatedServiceTest) one(written bool) int {
+	if written {
+		return 1
+	}
+	return 0
+}
+
+func (test *MessageCreatedServiceTest) pushesHandled(records []NotificationRecord) int {
+	handled := 0
+	for _, record := range records {
+		handled += test.one(record.PushState != (&NotificationStatesService{}).PushPending())
+	}
+	return handled
+}
+
+func (test *MessageCreatedServiceTest) registered(domainId string) bool {
+	found := []DocumentId{}
+	err := NotifyTestSetup{}.Documents().Matching((&CollectionNamesService{}).Domains(), map[string]any{"domainId": domainId}, 1, &found)
+	Assert.IsTrue(err == nil, fmt.Sprintf("domain lookup failed: %v", err))
+	return len(found) > 0
+}
+
+func (test *MessageCreatedServiceTest) writesOfOneCall(domainId string, eventId string, messageId string, authorMemberId string) int {
+	setup := NotifyTestSetup{}
+	records, recordsErr := setup.NotificationStore().FindByMessage(domainId, messageId, 100)
+	waiting, waitingErr := test.queue().Waiting(domainId, 10)
+	seen, seenErr := setup.Seen().Seen(domainId, eventId)
+	participants, threadErr := setup.ThreadStore().Participants(domainId, messageId)
+	Assert.IsTrue(recordsErr == nil && waitingErr == nil && seenErr == nil && threadErr == nil, "counting the writes failed")
+	return test.one(test.registered(domainId)) + test.one(seen) + test.one(slices.Contains(participants, authorMemberId)) + len(records) + test.pushesHandled(records) + len(waiting)
+}
+
+func (test *MessageCreatedServiceTest) TestAMessageToTwentyTwoReadersWritesAtMostTwentyFiveTimesInOneCall() {
+	setup := NotifyTestSetup{}
+	domainId := setup.Domain()
+	member, _ := setup.Realms(domainId)
+	envelope := setup.Envelope("messaging", events.Types{}.MessageCreated(), domainId, test.channelMessage("msg_22", 22))
+	receipt, err := setup.Events().Receive(setup.Service(member), envelope)
+	writes := test.writesOfOneCall(domainId, envelope.EventId, "msg_22", "member-0")
+	Assert.IsTrue(err == nil, fmt.Sprintf("receive failed: %v", err))
+	Assert.Equals("applied", receipt.Status)
+	Assert.IsTrue(writes <= 25, fmt.Sprintf("one message.created call wrote %d times", writes))
+}
+
+func (test *MessageCreatedServiceTest) TestTheJobNotifiesTheReadersThatOneCallLeftOver() {
+	setup := NotifyTestSetup{}
+	domainId := setup.Domain()
+	member, _ := setup.Realms(domainId)
+	envelope := setup.Envelope("messaging", events.Types{}.MessageCreated(), domainId, test.channelMessage("msg_22", 22))
+	_, err := setup.Events().Receive(setup.Service(member), envelope)
+	progress, processFailure := test.fanout().Process(domainId, 25)
+	Assert.IsTrue(err == nil && processFailure == nil, fmt.Sprintf("apply failed: %v %v", err, processFailure))
+	Assert.Equals(false, progress.More)
+	Assert.Equals(22, len(test.kinds(domainId, "msg_22")))
 }
