@@ -346,3 +346,26 @@ func TestImplicitTls(t *testing.T) {
 		t.Fatalf("want TLS recorded")
 	}
 }
+
+func TestListenUsesTheGivenAddress(t *testing.T) {
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := probe.Addr().String()
+	probe.Close()
+	server, err := Listen(address, Options{})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer server.Close()
+	if server.Address() != address {
+		t.Fatalf("want %s, got %s", address, server.Address())
+	}
+}
+
+func TestListenRefusesABadAddress(t *testing.T) {
+	if _, err := Listen("not an address", Options{}); err == nil {
+		t.Fatal("want an error for a bad address")
+	}
+}

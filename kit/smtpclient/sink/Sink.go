@@ -16,7 +16,11 @@ type Sink struct {
 }
 
 func Start(options Options) (*Sink, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	return Listen("127.0.0.1:0", options)
+}
+
+func Listen(address string, options Options) (*Sink, error) {
+	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return nil, err
 	}
