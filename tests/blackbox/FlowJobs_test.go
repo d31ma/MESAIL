@@ -29,6 +29,16 @@ func readersBeyondTheInlineLimit() int {
 	return 22
 }
 
+func mostRecipientsPerSend() int {
+	return 20
+}
+
+func addedToConversation(conversationId string, people ...newPerson) map[string]any {
+	message := groupMessage("jobs fan-out", uniqueClientId("fan-out"), people...)
+	message["conversationId"] = conversationId
+	return message
+}
+
 func domainServiceToken(t *testing.T, stack Stack, domainId string) string {
 	t.Helper()
 	var token struct {
@@ -102,7 +112,8 @@ func TestFlowJobsNotifyFinishesAFanOutToMoreThanTwentyReaders(t *testing.T) {
 	stack := NewStack(t)
 	ana := fixtureTokens(t, stack, "ANA")
 	readers := manyReaders(t, stack, ana(), readersBeyondTheInlineLimit())
-	sent := send(t, stack, ana(), groupMessage("jobs fan-out", uniqueClientId("fan-out"), readers...), http.StatusCreated)
+	first := send(t, stack, ana(), groupMessage("jobs fan-out start", "start", readers[:mostRecipientsPerSend()]...), http.StatusCreated)
+	sent := send(t, stack, ana(), addedToConversation(first.Message.ConversationId, readers[mostRecipientsPerSend():]...), http.StatusCreated)
 	awaitEveryReaderNotified(t, stack, readers, sent.Message.MessageId)
 }
 

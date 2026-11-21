@@ -51,8 +51,28 @@ func connectSocket(t *testing.T, stack Stack, tokens tokenSource, deviceId strin
 	client := DialSocket(t, stack.baseUrl, socketPath())
 	expectSocketEvent(t, client, "hello")
 	client.SendJson(t, authFrame(tokens(), deviceId))
-	expectSocketEvent(t, client, "auth.accepted")
+	awaitAccepted(t, client)
 	return client
+}
+
+func awaitAccepted(t *testing.T, client *SocketClient) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		event, open := client.NextEvent(t, time.Until(deadline))
+		if !open || event.Type == "auth.accepted" || event.Type == "auth.expired" {
+			expectSocketEventValue(t, client, event, open, "auth.accepted")
+			return
+		}
+	}
+	t.Fatal("no auth.accepted frame within 10 s")
+}
+
+func expectSocketEventValue(t *testing.T, client *SocketClient, event SocketEvent, open bool, wanted string) {
+	t.Helper()
+	if !open || event.Type != wanted {
+		t.Fatalf("want a %s frame, got %+v (socket open %v, close code %d)", wanted, event, open, client.CloseCode())
+	}
 }
 
 func awaitSocketEvent(t *testing.T, client *SocketClient, tokens tokenSource, matches func(SocketEvent) bool) SocketEvent {
