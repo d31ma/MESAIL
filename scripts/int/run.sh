@@ -26,6 +26,8 @@ Run:
                            for a short smoke run, e.g. the apps that use FYLO
   --floci-tests <regex>    floci step runs only the blackbox tests matching it (MESAIL_TEST_RUN)
   --keep-worktree          keep the worktree (for debugging)
+  --quick                  leave the slow blackbox tests off (by default the floci step sets
+                           MESAIL_PASSKEY_EXPIRY_TEST=1 and MESAIL_K3_MEMBERS=200, as a release-green run needs)
   --keep-stack             leave the Floci stack running and keep its :int-<run> images, for the next
                            tester on the dev host (who stops the stack); remove the images later with
                            eval "$(mesail-devhost env)"; docker rmi $(docker images -q --filter reference='*:int-<run>')
@@ -92,6 +94,7 @@ parse_arguments() {
   MESAIL_REF=origin/develop
   KEEP_WORKTREE=0
   KEEP_STACK=0
+  QUICK=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --ty) TY_MAC="$(option_value "$@")"; shift 2 ;;
@@ -111,6 +114,7 @@ parse_arguments() {
       --floci-tests) FLOCI_TESTS="$(option_value "$@")"; shift 2 ;;
       --keep-worktree) KEEP_WORKTREE=1; shift ;;
       --keep-stack) KEEP_STACK=1; shift ;;
+      --quick) QUICK=1; shift ;;
       -h | --help) usage ;;
       *) fail "unknown option $1 (see --help)" ;;
     esac
@@ -327,11 +331,21 @@ image_tag() {
   echo "$RUN_ID" | tr -cd 'a-z0-9-'
 }
 
+slow_test_count() {
+  echo 200
+}
+
+use_slow_tests() {
+  if [ "$QUICK" = 1 ]; then echo "slow blackbox tests stay off (--quick)"; return 0; fi
+  export MESAIL_PASSKEY_EXPIRY_TEST=1 MESAIL_K3_MEMBERS="${MESAIL_K3_MEMBERS:-$(slow_test_count)}"
+}
+
 floci_settings() {
   MESAIL_IMAGE_TAG="$(image_tag)"
   export MESAIL_INT_KEEP_STACK="$KEEP_STACK"
   export MESAIL_OWNER=msl-int MESAIL_LOG_DIR="$RUN_LOGS/floci" MESAIL_IMAGE_TAG MESAIL_NO_PRUNE=1
   if [ -n "${FLOCI_TESTS:-}" ]; then export MESAIL_TEST_RUN="$FLOCI_TESTS"; fi
+  use_slow_tests
   mkdir -p "$MESAIL_LOG_DIR"
 }
 
@@ -455,6 +469,28 @@ flow_result() {
   echo "pass ($passed tests)"
 }
 
+skipped_tests() {
+  awk '/\.go:[0-9]+: / { reason = $0; sub(/^ *[A-Za-z0-9_]*\.go:[0-9]+: /, "", reason) } /^ *--- SKIP: / { print "- " $3 ": " reason; reason = "" }' "$(blackbox_log)"
+}
+
+skipped_section() {
+  wanted_step floci || return 0
+  [ -f "$(blackbox_log)" ] || return 0
+  echo "## Skipped blackbox tests"
+  skipped_tests | grep . || echo "none"
+}
+
+untested_flows() {
+  local pattern
+  wanted_step floci || return 0
+  while IFS="$(printf '\t')" read -r _ pattern; do
+    case "$(flow_result "$pattern")" in
+      pass*) ;;
+      *) echo "$pattern" ;;
+    esac
+  done < "$(flows_file)"
+}
+
 coverage_section() {
   local flow pattern
   echo "## Flows on the dev host (Floci blackbox)"
@@ -471,10 +507,17 @@ run_result() {
   echo GREEN
 }
 
+headline_result() {
+  local untested
+  untested="$(untested_flows | grep -c .)"
+  if [ "$(run_result)" = RED ] || [ "$untested" = 0 ]; then run_result; return; fi
+  echo "GREEN, INCOMPLETE ($untested flows not tested; not release-green)"
+}
+
 write_summary() {
   local summary="$RUN_LOGS/summary.md"
   {
-    echo "# MSL-INT $RUN_ID: $(run_result)"
+    echo "# MSL-INT $RUN_ID: $(headline_result)"
     echo "Started $STARTED_AT, ended $(date '+%Y-%m-%d %H:%M:%S %Z'). Steps asked: $RUN_STEPS."
     shas_section
     echo "- settings: FYLO_ALLOW_SYSTEM_DISK=${FYLO_ALLOW_SYSTEM_DISK:-unset}"
@@ -482,6 +525,7 @@ write_summary() {
     echo "$MACHINE_AT_START"
     steps_table
     coverage_section
+    skipped_section
     failure_section
   } > "$summary"
   echo "=== summary: $summary"
