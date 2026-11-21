@@ -3166,9 +3166,15 @@ tested restore.
   ATLAS (Rec.)" (2026-11-21), so the FYLO roots and the blob folder are
   folders on Mesail's ATLAS subvolume and one snapshot holds both.
   Keycloak's SQLite file stays on the VM's own disk (SQLite does not
-  support network file systems); a `sqlite3 ".backup"` copy is written
-  into the subvolume before EACH hourly snapshot, so Keycloak's restore
-  point is never older than one hour. K31 owns this copy job. The slice also checks that
+  support network file systems). K31 owns the hourly copy job agreed with
+  Platform (OPERATIONS.md section 7.2): at about :00 a `sqlite3 ".backup"`
+  copy into a temporary file, `fsync`, rename to
+  `keycloak/keycloak-backup.sqlite`, then the marker
+  `keycloak/keycloak-backup.done` (time and SHA-256) by a rename; Platform's
+  :05 snapshot logs a stale copy (older than 15 minutes) and alerts the hub
+  after three stale hours; a manual snapshot gets a fresh copy first; no
+  ssh key from the VM to CITADEL. Keycloak's restore point is never older
+  than one hour. The slice also checks that
   Mesail writes and syncs a file before the FYLO record that names it, so
   a snapshot never has a record without its file (an orphan file without a
   record is harmless and shows in the attachments orphan report).

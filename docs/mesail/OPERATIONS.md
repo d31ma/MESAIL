@@ -311,7 +311,7 @@ backup plan (`plat-atlas-backup-plan.md` in the hub's notes), and
 | --- | --- | --- |
 | FYLO roots | one folder per service (and domain) in the Mesail-only area on ATLAS (subvolume `/mnt/atlas-pool/MESAIL`, NFS export `mesail`), mounted as the function's `/mnt/data` | FYLO network roots with leases (FYLO's next release) |
 | Files (attachments, backups, raw mail) | the blob folder in the same Mesail-only area | plain files named by `blobKey` and `rawBlobKey`; not FYLO file records |
-| Keycloak | the SQLite file in `MESAIL_KEYCLOAK_DATA`, on the VM's own disk | SQLite does not support network file systems. A copy made with `sqlite3 <file> ".backup <copy>"` is written into the Mesail-only area before EACH hourly snapshot, so every snapshot holds a consistent copy and Keycloak's restore point is never older than one hour |
+| Keycloak | the SQLite file in `MESAIL_KEYCLOAK_DATA`, on the VM's own disk | SQLite does not support network file systems. Every hour a copy goes into `keycloak/keycloak-backup.sqlite` in the Mesail-only area (7.2), so Keycloak's restore point is never older than one hour |
 | Secrets | the host's secret files | their own backup, kept apart from the data |
 
 Development and tests never touch ATLAS (the dev host's data disk and
@@ -327,9 +327,21 @@ the FYLO test image are on HANGAR).
 - No pause and no `fylo pack`: FYLO treats an atomic snapshot like a power
   cut. Committed transactions are there; unfinished ones roll back at the
   next open, and indexes rebuild (layout spec 20.3).
-- Before every deploy and every risky step:
-  `plat-atlas-snapshot take --kind manual --label <why>`. It returns when
-  the copy is on HAVEN.
+- Before every deploy and every risky step: first a fresh Keycloak copy
+  (below), then `plat-atlas-snapshot take --kind manual --label <why>`. It
+  returns when the copy is on HAVEN.
+- **Keycloak copy (Mesail and Platform agreed, 2026-11-21):**
+  - Mesail, every hour at about :00: `sqlite3 <file> ".backup <temp>"`
+    into a temporary file in `keycloak/` in the Mesail-only area, `fsync`,
+    rename it to `keycloak/keycloak-backup.sqlite`, then write
+    `keycloak/keycloak-backup.done` (the time and the copy's SHA-256),
+    also by a rename. So a snapshot never holds a half-written copy.
+  - Platform, the hourly snapshot at :05 on CITADEL: a marker younger
+    than 15 minutes is normal. Older or missing, the snapshot still runs
+    and logs `keycloak copy stale (age N min)`; three stale hours in a row
+    raise an alert to the hub.
+  - No ssh key from the production VM to CITADEL; the marker is the only
+    link between the two jobs.
 - The ATLAS export is `async` (the user: "keep the fast `async` mode"), so
   a CITADEL crash can lose the last seconds of writes. FYLO finds a damaged
   file when it reads it and refuses it (layout spec 20.2); restore it as
@@ -359,8 +371,9 @@ one of them before it goes in this runbook.
   snapshot first). Never copy part of a collection by hand.
 - **One document, with `fylo restore-doc`** (FYLO slice L1-10, asked
   for FYLO's next release): find it in a HAVEN copy
-  (`plat-atlas-restore find`), stage that collection to a scratch folder on
-  HANGAR (`plat-atlas-restore stage`), stop every writer (7.3), restore its
+  (`plat-atlas-restore find`), stage only the paths that `fylo
+  restore-doc --print-needed` lists (a partial snapshot root is enough) to
+  a scratch folder on HANGAR (`plat-atlas-restore stage`), stop every writer (7.3), restore its
   blob first if it names one, then `fylo restore-doc --from <scratch
   folder> --root <live root> --namespace <namespace> --collection
   <collection> --id <TTID>`. It writes the document as a new version
@@ -384,10 +397,12 @@ one of them before it goes in this runbook.
   `att_` ids in the `attachments` root; restore a missing attachment with
   its file. `search` and `notify` need no restore for one document; they
   are refilled from events.
-- **Keycloak:** copy the `.backup` copy from the snapshot back to
-  `MESAIL_KEYCLOAK_DATA` while Keycloak is stopped. Restoring it keeps
-  every person's id; a person re-created by hand in Keycloak is a new,
-  unknown person to Mesail (CONTRACTS.md "identity").
+- **Keycloak** (also a step of PLAT-19's restore cases A and B): with
+  Keycloak stopped, copy `keycloak/keycloak-backup.sqlite` from the same
+  snapshot to `MESAIL_KEYCLOAK_DATA`, after checking its SHA-256 against
+  `keycloak/keycloak-backup.done`. Restoring it keeps every person's id; a
+  person re-created by hand in Keycloak is a new, unknown person to Mesail
+  (CONTRACTS.md "identity").
 
 ### 7.5 After a restore
 1. Open each restored root normally, so FYLO's recovery runs.
