@@ -148,6 +148,7 @@ start_run() {
   STEPS_FILE="$RUN_LOGS/steps.tsv"
   mkdir -p "$RUN_LOGS" || fail "cannot make $RUN_LOGS"
   : > "$STEPS_FILE"
+  echo "$$" > "$RUN_LOGS/run.pid"
   echo "=== run $RUN_ID: logs in $RUN_LOGS"
 }
 
@@ -193,7 +194,29 @@ verify_builds() {
   return "$status"
 }
 
+run_alive() {
+  local pid
+  pid="$(cat "$(log_base)/$1/run.pid" 2> /dev/null)"
+  [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null
+}
+
+remove_stale_worktree() {
+  local folder="$1" name
+  name="$(basename "$folder")"
+  run_alive "$name" && return 0
+  git -C "$(shared_clone)" worktree remove --force "$folder" && echo "removed the worktree of the ended run $name"
+}
+
+remove_stale_worktrees() {
+  local folder
+  for folder in "$(worktree_base)"/int-20*; do
+    [ -d "$folder" ] || continue
+    remove_stale_worktree "$folder" || return 1
+  done
+}
+
 make_worktree() {
+  remove_stale_worktrees || return 1
   local clone commit
   clone="$(shared_clone)"
   git -C "$clone" fetch --prune origin || return 1
