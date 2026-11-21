@@ -23,8 +23,12 @@ the shared clone
 the user's rule; `~/Developer/Worktrees/MESAIL` before: the git data stays
 in the shared clone, build output goes to
 `~/Developer/AnvilTargets/targets/<name>`, a branch is pushed at every step
-and at least hourly, and a worktree is removed at its merge) and logs
-`~/Library/Logs/local/MESAIL`. The old `CADUCEUS` paths are links
+and at least hourly, and a slice's worktree and its `targets/<name>` are
+removed in the same turn as its merge. Platform's space rule: all Mesail
+worktrees plus their build output in `targets/` use at most 15 GiB together,
+with no limit for one worktree; before a cold build that may add more than
+5 GiB, check `df -h ~/Developer/AnvilTargets`, and ask Platform first when
+ANVIL has under 20 GiB free) and logs `~/Library/Logs/local/MESAIL`. The old `CADUCEUS` paths are links
 to these. The lock name `caduceus-build` did not change. Owned file sets never overlap, so slices of the same
 wave run at the same time.
 
