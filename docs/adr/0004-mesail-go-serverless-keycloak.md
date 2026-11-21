@@ -17,6 +17,12 @@
   the Lambda images in Floci on the owner's own machines. Read every AWS
   mapping in this ADR (SES, S3 plus CloudFront, API Gateway, EventBridge,
   AWS Lambda with EFS) as history, not as a plan.
+- Amended 2026-11-21 (section 4, "Where live roots live" and
+  "Snapshots"): production FYLO roots are folders directly on the ATLAS
+  NFS share, opened as FYLO network roots with leases (the user: "FYLO
+  folders on ATLAS (Rec.)"), not ext4 inside a VM disk file; backups are
+  Platform's btrfs snapshots with history on HAVEN. Development and tests
+  never touch ATLAS.
 
 ## Context
 
@@ -211,13 +217,26 @@ Decisions:
   still give each domain its own roots: the set of a domain's roots is its
   **cell**, which moves, is backed up and is deleted as one unit (`fylo
   pack` per root), and chat still never leaves it.
-- **Where live roots live: on ATLAS** (the owner's decision, 2026-11-10:
-  "Keep it on ATLAS"). Live roots stay on ext4 on the ATLAS raw disk, the
-  FitNest pattern: a Floci Lambda with EFS on the `mesail` dev host now,
-  and on kestrel later. The measured cost is accepted and designed for:
-  writes take about 109 ms (p50), 346 ms (p95) and stall up to 10.9 s, so
-  one writer manages about 9 writes per second; reads are as fast as on a
-  local disk. Every FYLO-owning service follows these rules:
+- **Where live roots live: FYLO folders on ATLAS** (amended 2026-11-21,
+  the user: "FYLO folders on ATLAS (Rec.)"; the owner's decision of
+  2026-11-10 was "Keep it on ATLAS", as ext4 inside a VM disk file on
+  ATLAS, the FitNest pattern). In production on kestrel each FYLO root is
+  a folder directly on the ATLAS NFS share (from CITADEL), mounted into the
+  function as its `/mnt/data`, with no VM disk file in between. FYLO opens
+  it as a **network root with leases** (FYLO's next release; until then
+  FYLO refuses a native root on a network share with `EREMOTEROOT`, so
+  production waits for that release and Mesail's pin bump, SLICES K30).
+  Why folders: btrfs on ATLAS then sees FYLO's own files, so a snapshot or
+  a restore can name one root or one collection, freed space returns to
+  the pool, and backups copy only changed files (PLAT-19). Development
+  and tests never touch ATLAS: the dev host keeps ext4 on its data disk on
+  HANGAR, and native runs use the FYLO test image on HANGAR. The cost
+  below was measured on the ATLAS raw disk; the folder form is measured
+  again before go-live (the cold first call, SLICES "Open before the
+  production release"). The cost is accepted and designed for: writes
+  took about 109 ms (p50), 346 ms (p95) and stalled up to 10.9 s, so one
+  writer manages about 9 writes per second. Every FYLO-owning service
+  follows these rules:
   - **Bounded work per call.** One request or job call does at most 25
     FYLO writes and stops after 20 seconds of work, far under the Lambda
     timeout (set to 60 seconds for every FYLO-owning function, under the
@@ -259,14 +278,20 @@ Decisions:
     containers sharing one root on EFS until it closes its EFS gate (FYLO
     ADR 0010 profile). So on real AWS with EFS, one container per
     FYLO-owning function stays the rule until FYLO says otherwise. On
-    Floci on a VM, the data disk is ext4 inside the guest; the rule still
-    holds there until K8 shows the per-call lease working.
+    the dev host the data disk is ext4 inside the guest; in production the
+    roots are FYLO network roots, whose lease names its owner (a new owner
+    takes over after 20 s, or at once on the same machine when the old
+    process is gone). The rule holds in both until FYLO says otherwise.
   - **Slow work goes through the outbox.** A route writes its own document
     once and returns; fan-out, indexing, notification and delivery happen
     later from the outbox relay and job routes (EVENTS.md). Chat stays
     responsive because `messaging` writes one document per message.
-  - **Snapshots.** `fylo pack` of every root to `.vdbx` files on ATLAS
-    before every deploy, so a deploy can roll back.
+  - **Snapshots** (amended 2026-11-21): Platform's btrfs snapshots of
+    the ATLAS folders, with all history on the HAVEN pool (PLAT-19), and a
+    manual snapshot before every deploy, so a deploy can roll back. FYLO
+    treats an atomic snapshot like a power cut, so no pause is needed;
+    `fylo pack` is for moving a database, not for backups (FYLO layout
+    spec sections 20.3 and 20.6). Restores follow OPERATIONS.md section 7.
   On this Mac, native development uses an APFS disk image (about 2 ms
   writes; on ATLAS until slice K25, on the local HANGAR SSD since, because
   ATLAS holds production data only), so slice tests are not slowed down.

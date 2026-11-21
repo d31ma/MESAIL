@@ -3154,24 +3154,23 @@ the fast `async` mode"). So a CITADEL crash or power cut can lose the last
 seconds of writes. FYLO finds a damaged file when it reads it and refuses
 it (FYLO's layout spec, section 20.2), so production needs backups and a
 tested restore.
-- **Backups (Platform, study PLAT-19):** read-only btrfs snapshots of the
-  ATLAS pool on CITADEL, hourly (kept 24 hours) and daily (kept 14 days),
-  and a nightly incremental `btrfs send` to the HAVEN pool. A copy outside
-  the router is a later question for the user. FYLO says an atomic
-  snapshot is enough as it is (layout spec section 20.3, proved by FYLO's
-  slice L1-3): FYLO treats it like a power cut, so no pause and no `fylo
-  pack` before it (pack is for moving a database, not for backups).
-- **One snapshot for all Mesail data:** the FYLO roots, Keycloak's SQLite
-  file (`MESAIL_KEYCLOAK_DATA`, WAL mode, power-cut safe when its `-wal`
-  file is in the same snapshot) and the files (attachments and the raw
-  mail store) must be in the SAME atomic snapshot. While production keeps
-  ADR 0004's layout (ext4 inside the VM's raw disk file on ATLAS), a
-  snapshot of that one raw file covers all of them. If the data ever moves
-  to several files or subvolumes, they need one snapshot that covers all.
-  The slice also checks that Mesail writes and syncs a file before the
-  FYLO record that names it, so a snapshot never has a record without its
-  file (an orphan file without a record is harmless and shows in the
-  attachments orphan report).
+- **Backups (Platform, PLAT-19):** every hour a read-only btrfs
+  snapshot of Mesail's ATLAS subvolume, sent incrementally to the HAVEN
+  pool. All history lives on HAVEN (hourly copies kept 24 hours, daily 30
+  days, manual 7 days); ATLAS keeps only the live data and one send base.
+  FYLO says an atomic snapshot is enough as it is (layout spec section
+  20.3, proved by FYLO's slice L1-3): no pause and no `fylo pack` (pack is
+  for moving a database, not for backups). A manual snapshot
+  (`plat-atlas-snapshot take`) comes before every deploy.
+- **One snapshot for all Mesail data:** the user chose "FYLO folders on
+  ATLAS (Rec.)" (2026-11-21), so the FYLO roots and the blob folder are
+  folders on Mesail's ATLAS subvolume and one snapshot holds both.
+  Keycloak's SQLite file stays on the VM's own disk (SQLite does not
+  support network file systems); a `sqlite3 ".backup"` copy is written
+  into the subvolume before each snapshot. The slice also checks that
+  Mesail writes and syncs a file before the FYLO record that names it, so
+  a snapshot never has a record without its file (an orphan file without a
+  record is harmless and shows in the attachments orphan report).
 - **Size estimate for Platform** (planning numbers, not measured; the
   user, 2026-11-21: "About 10 people"): per person and day, about 120
   messages in and out (about 12 with attachments of about 1 MiB each).
@@ -3189,55 +3188,27 @@ tested restore.
   update PLAT-19.
 - **ATLAS space (Platform, 2026-11-21):** ATLAS has 236 GiB, 143 GiB
   free (kestrel's FitNest and K3s use 89 GiB). At about 12 GB a month,
-  Mesail fills it in about 10 to 11 months without a retention rule,
-  sooner with snapshots. So if the user chooses retention, K32 must run
-  in production before month 7. A raw VM disk file changes in large blocks, so the nightly
-  incremental copy may be bigger than the estimate above; PLAT-19
-  measures it. The space decision is a release blocker ("Open before the
-  production release").
-- **Writers of a root** (`k31-plat19-restore-answers.md` in the MESAIL
-  Build Coordinator's notes): the app's Lambda containers
-  (`floci-aws-mesail-<service>-*`) or the `realtime` container. New ones
-  start from user requests and other apps' outbox pushes (both through the
-  router), from three schedulers (`scheduler`, `scheduler-daily` and the
-  in-function `@Schedule` workers of K27) and from the SMTP edge. So
-  stopping the containers alone is not enough. The first runbook stops the
-  whole stack: `docker compose stop router smtp scheduler scheduler-daily
-  realtime` (never `rm`), then `docker stop` every `floci-aws-mesail-*`
-  container, and checks that none is left and no `fylo` runs. Outbox items
-  wait and are pushed again after the start. Stopping ONE app while the
-  rest runs needs Lambda concurrency 0 (not tested on Floci 2.4.0) or a
-  router list of paused functions; the slice tests one of them.
-- **Files are not FYLO file records:** attachments, backups and raw mail
-  are plain files in the shared blob folder, named by `blobKey` or
-  `rawBlobKey` in `attachments/attachments`, `attachments/backups`,
-  `mail-in/inbound-raw` and `mail-out/outbound-queue`. So `fylo verify`
-  (EFILELINK) does not check them; the slice adds a Mesail check that
-  every named file exists and matches the document's `sha256` or `size`.
-- **Restore runbook** in OPERATIONS.md section 7 (FYLO's steps):
-  1. stop every writer of that root first (never restore under a running
-     owner; see "Writers of a root");
-  2. restore the root (and Keycloak and the files from the same snapshot)
-     with Platform's restore command. For ONE document, never copy its
-     files by hand (FYLO layout spec section 20.6: that skips the version
-     history, the indexes and the lease checks): use `fylo restore-doc`,
-     which writes it as a new version through the engine, reading from a
-     read-only mount of the snapshot. A document that names a blob file is
-     restored together with that file from the SAME snapshot, the file
-     first (a plain copy with Platform's `plat-atlas-restore copy`);
-  3. open the root normally, so FYLO's recovery runs: unfinished
-     transactions roll back and indexes rebuild;
-  4. run `fylo verify --root <root>` (it also reports broken links
-     between FYLO documents and FYLO file records as EFILELINK) and
-     Mesail's blob check;
-  5. run `rebuildCollection` only for the collections that verify reports;
-  6. start the writers again. The restored lease names an old owner, so the
-     first new owner takes over after 20 s, or at once on the same machine
-     when the old process is gone.
-  Take the exact commands from the FYLO release that Mesail pins.
+  Mesail fills it in about 11 months without a retention rule. So if the
+  user chooses retention, K32 must run in production before month 7. With
+  folders (not a VM disk file), freed space returns to the pool and the
+  hourly copies hold only changed files.
+- **Runbook:** OPERATIONS.md section 7 (a draft since 2026-11-21) has
+  where the data lives, the backups, how to stop every writer, the restore
+  of a whole collection, of one document (`fylo restore-doc`) and of a
+  document with its file, the checks after a restore (`fylo verify`,
+  `EFILELINK`, `rebuildCollection`) and the go-live list. Attachments,
+  backups and raw mail are plain files named by `blobKey` and `rawBlobKey`,
+  not FYLO file records, so `fylo verify` does not check them. The slice
+  adds:
+  - Mesail's blob check: every named file exists and matches the
+    document's `sha256` or `size`;
+  - a tested way to stop ONE app while the rest runs (Lambda concurrency 0
+    on Floci, or a router list of paused functions);
+  - the Keycloak `.backup` copy before each snapshot.
 - **Restore drill:** restore one daily snapshot to a test image on HANGAR
   (never over live data, never the dev host's data disk), run the runbook
-  steps 3 to 5, and record the time of each step and the total.
+  steps of section 7.5, and record the time of each step and the total
+  in section 7.6.
 - **Done when:** the snapshot schedule and the nightly send run on
   CITADEL; OPERATIONS.md section 7 has the runbook; the drill passed `fylo
   verify --root` with its measured times written in OPERATIONS.md; and
@@ -3254,7 +3225,7 @@ year (K31), most of it attachments and raw mail.
   raised through the hub; this slice does not set one. It is one of the
   answers to the ATLAS space blocker ("Open before the production
   release"): if the user chooses retention, K32 must run in production
-  before month 7 (ATLAS is full in about 10 to 11 months at about 10
+  before month 7 (ATLAS is full in about 11 months at about 10
   people); do it before go-live when possible.
 - **Whole months:** the large collections are already split by month
   (`messages`, `deliveries`, `search-index`, `notifications`,
@@ -3274,6 +3245,26 @@ year (K31), most of it attachments and raw mail.
   with no retention keeps everything; the job is idempotent; and
   OPERATIONS.md says how to set the retention and how much space it frees.
 
+### K33. Blackbox flow tests for the flows MSL-INT cannot prove yet (release blocker, about 6-10 hours)
+MSL-INT (the integration run of Mesail `develop` against DuVay, TACHYON
+and FYLO `develop`) found that `tests/blackbox/` has no flow tests for six
+flows; only `Health_test.go` names them. Brief: `k33-brief.md` in the
+MESAIL Build Coordinator's notes.
+- **Tests** (build tag `blackbox`, names MSL-INT can select, such as
+  `TestFlowTotp...` and `TestFlowMailOut...`): sign-in with password and
+  TOTP (a wrong and a reused code); mail out through the SMTP edge (to an
+  outside address and to another Mesail domain; a failed delivery is
+  reported); notify; devicebox; realtime (a new message without polling,
+  reconnect after a drop); the scheduled jobs on their schedulers (only
+  after K27 is on `develop`, with `develop`'s scheduler names).
+- **Rules:** observable behaviour only (HTTP, SMTP, the realtime socket);
+  one case per input; fixtures as in `tests/blackbox/README.md`. The
+  session sends its test list to mesail-arch (`tests/blackbox/**` owner)
+  before writing code. A test that finds a bug is reported with its
+  owning product, never weakened.
+- **Done when:** the six flows have tests on `develop`, and they pass or
+  each failure is a reported bug.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3290,9 +3281,11 @@ Release blockers:
   and K22 phase 2 proves it on Floci.
 - **K27:** no in-function `@Schedule` workers in the Lambda profile.
 - **FYLO roots on ATLAS** (the user, 2026-11-21: "Mesail production data
-  will live on ATLAS"; ADR 0004 and ADR 0007 stand): a FYLO root on ATLAS
-  needs the FYLO release with network roots (NR leases). Until then FYLO
-  refuses a native root there (EREMOTEROOT).
+  will live on ATLAS", then "FYLO folders on ATLAS (Rec.)"; ADR 0004 and
+  ADR 0007 amended): each root is a folder on the ATLAS NFS share, which
+  needs FYLO's next release (network roots with leases) and Mesail's pin
+  bump with K30. Until then FYLO refuses a native root there
+  (EREMOTEROOT).
 - **Cold first call, measured on production:** once TAC-ST2 and FYLO-CR1
   are released, measure the first store call after a start on a
   production or staging host (never the dev host), and check it fits the
@@ -3301,22 +3294,17 @@ Release blockers:
   user, 2026-11-21: "keep the fast `async` mode"), so scheduled backups,
   the restore runbook and one restore drill must be done first.
 - **ATLAS space:** at about 10 people (about 12 GB a month) Mesail fills
-  ATLAS's 143 GiB free in about 10 months without retention (K31). Before
+  ATLAS's 143 GiB free in about 11 months without retention (K31). Before
   go-live the user decides, through the hub, one or more of: a retention
   rule (delete mail and attachments after N months, K32), bigger ATLAS
   disks, or the blobs (attachments and raw mail) outside ATLAS. Decide with
   PLAT-19's numbers, and check the choice again with the first production
   month's real numbers. With retention, K32 runs before month 7.
-- **ATLAS mirror health:** one of ATLAS's two mirrored SSDs was flagged
-  faulty on 2026-11-15 and was back in the mirror with 24 read errors on
-  2026-11-17 (Platform; urgent at the hub). It must be settled (the disk
-  checked or replaced, and the mirror scrubbed clean) before production
-  data goes on ATLAS.
-- **Storage form on ATLAS (with the user):** FYLO folders directly on
-  ATLAS (PLAT-19's and the coordinator's lean: space reuse and fast
-  restores; needs FYLO's network roots) or one VM disk file (ADR 0004
-  today). If folders are chosen, ADR 0004 "Where live roots live" and
-  ADR 0007's EFS row are amended.
+- **ATLAS SSD read errors (2026-11-17):** disk replaced, confirmation
+  pending from Platform.
+- **K33:** blackbox flow tests for TOTP sign-in, mail out through the
+  SMTP edge, notify, devicebox, realtime and the scheduled jobs pass (or
+  each failure is a reported bug) before the coordinated release.
 - **Dependencies tested on their `develop` (the release rule):** Mesail
   tests each dependency's `develop` build before that dependency's release,
   then moves to the release:

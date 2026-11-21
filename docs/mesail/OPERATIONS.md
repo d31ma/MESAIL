@@ -96,7 +96,7 @@ so a user waits at most for the one sweep that is running, about
 
 | You provide | Why | Notes |
 | --- | --- | --- |
-| A VM on your host with its own Docker engine, and a data disk | Everything runs there | Mesail's data (FYLO roots, files, Keycloak) lives on the data disk. Follow ADR 0004's rules for FYLO roots. |
+| A VM on your host with its own Docker engine, and a shared folder for Mesail's data | Everything runs in the VM; the data lives in the folder | FYLO roots and the blob folder are folders on an NFS share (on this install the ATLAS share from CITADEL, ADR 0004 section 4), opened by FYLO as network roots with leases (FYLO's next release). Keycloak's SQLite file stays on the VM's own disk (section 7). Follow ADR 0004's rules for FYLO roots. |
 | A public host name and its TLS certificate files | The web address people open | Any CA works, including your own internal CA when only your own devices connect. Mesail has no ACME client. |
 | MX records for every hosted domain, and inbound TCP port 25 to the SMTP edge | Receiving mail from outside | Plus SPF, DKIM and DMARC records; the admin app shows the values to publish. |
 | A mail relay (smarthost), or outbound port 25 with reverse DNS for your address | Sending mail to outside addresses | Choose one in section 3. |
@@ -151,7 +151,7 @@ queued and never sent. Mail between your own hosted domains needs neither.
 **Files (attachments and mail)**
 
 All files (attachments, raw received mail, outbound mail) live in **one
-blob folder** on the VM's data disk, shared by `attachments`, `mail-in`,
+blob folder** on the shared data folder (ATLAS on this install), shared by `attachments`, `mail-in`,
 `mail-out`, the router and the SMTP edge (ADR 0007 section 7). Back up
 that folder with the data.
 
@@ -271,16 +271,21 @@ the old as previous, restart, then remove the previous value.
   deploy. The functions' image addresses point to that registry.
 - Floci is pinned by digest. Upgrade it only after OP3 passes with the new
   digest.
-- Before every deploy, `fylo pack` every FYLO root (ADR 0004 section 4),
-  so a deploy can roll back.
+- Before every deploy, take a manual snapshot
+  (`plat-atlas-snapshot take --kind manual --label deploy-<version>`, section
+  7), so a deploy can roll back. `fylo pack` is for moving a database, not
+  for backups.
 - One live process per FYLO root (ADR 0004 section 4, "One live process
   per root"): a deploy stops a function's old container before its new
   one takes calls, and never runs two containers of one FYLO-owning
   function at the same time. A second container would get `EROOTLOCKED`
   on every store call ("store is not available").
-- FYLO's file-system profile: Mesail uses fylo's native profile everywhere,
-  production included. Mesail runs on-premise, and Floci's "EFS" there is a
-  Docker volume on an ext4 disk, the same as on the dev host. TACHYON
+- FYLO's file-system profile: the dev host and native runs use fylo's
+  native profile on ext4 or APFS. Production roots are folders on the ATLAS
+  NFS share, which FYLO opens as network roots with leases from its next
+  release on (before that it refuses them with `EREMOTEROOT`); take the
+  exact setting from that FYLO release and the TACHYON release Mesail pins,
+  and check it in the pin-bump slice (SLICES K30). TACHYON
   26.46.02 starts `fylo exec --loop --root <root> --max-request-bytes
   1048576 --max-response-bytes 8388608`, with no profile option, which
   means native. The `efs-sidecar-v1` profile is only for real AWS EFS;
@@ -293,14 +298,117 @@ the old as previous, restart, then remove the previous value.
   `TAC_SHUTDOWN_GRACE_SECONDS=5`, so the clean stop fits inside the 10
   seconds that Docker and Floci give before SIGKILL.
 
-## 7. Backups and restore
+## 7. Backups and restore (go-live runbook, draft)
 
-| What | How |
-| --- | --- |
-| FYLO roots | `fylo pack` of each root to `.vdbx` files, before every deploy and on a schedule. |
-| Files (attachments, raw mail) | Copy the attachments folder and the raw store folder. |
-| Keycloak | Back up the SQLite file in `MESAIL_KEYCLOAK_DATA`. Restoring it keeps every person's id; a person re-created by hand in Keycloak is a new, unknown person to Mesail (CONTRACTS.md "identity"). |
-| Secrets | Their own backup, kept apart from the data. |
+Draft for SLICES K31; K31 finishes it after the restore drill. Sources:
+FYLO's layout spec sections 20.2, 20.3 and 20.6, Platform's PLAT-19
+backup plan (`plat-atlas-backup-plan.md` in the hub's notes), and
+`k31-plat19-restore-answers.md` in the MESAIL Build Coordinator's notes.
+
+### 7.1 Where the data lives
+
+| Data | Place | Notes |
+| --- | --- | --- |
+| FYLO roots | one folder per service (and domain) on the ATLAS NFS share, mounted as the function's `/mnt/data` | FYLO network roots with leases (FYLO's next release) |
+| Files (attachments, backups, raw mail) | the blob folder on the same share | plain files named by `blobKey` and `rawBlobKey`; not FYLO file records |
+| Keycloak | the SQLite file in `MESAIL_KEYCLOAK_DATA`, on the VM's own disk | SQLite does not support network file systems. A copy made with `sqlite3 <file> ".backup <copy>"` is written into the shared folder before each snapshot, so the snapshot holds a consistent copy |
+| Secrets | the host's secret files | their own backup, kept apart from the data |
+
+Development and tests never touch ATLAS (the dev host's data disk and
+the FYLO test image are on HANGAR).
+
+### 7.2 Backups (Platform)
+- Every hour Platform takes a read-only btrfs snapshot of Mesail's ATLAS
+  subvolume and sends it incrementally to the HAVEN pool. All history is on
+  HAVEN: hourly copies kept 24 hours, daily copies 30 days, manual copies 7
+  days. ATLAS keeps only the live data and one send base.
+- No pause and no `fylo pack`: FYLO treats an atomic snapshot like a power
+  cut. Committed transactions are there; unfinished ones roll back at the
+  next open, and indexes rebuild (layout spec 20.3).
+- Before every deploy and every risky step:
+  `plat-atlas-snapshot take --kind manual --label <why>`. It returns when
+  the copy is on HAVEN.
+- The ATLAS export is `async` (the user: "keep the fast `async` mode"), so
+  a CITADEL crash can lose the last seconds of writes. FYLO finds a damaged
+  file when it reads it and refuses it (layout spec 20.2); restore it as
+  below.
+
+### 7.3 Stop every writer first
+Never restore under a running owner. What starts a writer: user requests
+and other apps' outbox pushes (both through the router), the schedulers
+(the scheduler containers and the in-function `@Schedule` workers inside
+each Lambda container until SLICES K27 removes them), and the SMTP edge.
+Stopping only a function's containers is not enough: the next request
+starts a new one.
+1. `docker compose stop router smtp realtime` and every scheduler service
+   (today `scheduler` and `scheduler-daily`; use the names on `develop`).
+   Never `rm`.
+2. `docker stop` every `floci-aws-mesail-*` container.
+3. Check: `docker ps --filter name=floci-aws-mesail-` is empty, and no
+   `fylo` process runs in the VM.
+Users are offline while this lasts. Outbox items wait in the senders' roots
+and are pushed again after the start. Stopping one app while the rest runs
+needs Lambda concurrency 0 or a router list of paused functions; K31 tests
+one of them before it goes in this runbook.
+
+### 7.4 Restore
+- **A whole root, namespace or collection:** Platform restores it from one
+  snapshot (PLAT-19 section 7 A or B: the damaged data is kept as a
+  snapshot first). Never copy part of a collection by hand.
+- **One document:** `fylo restore-doc`, reading from a read-only mount of
+  the snapshot; it writes the document as a new version through the engine.
+  Never copy a document's files by hand: that skips the version history,
+  the indexes and the lease checks (layout spec 20.6).
+- **Documents that name a file** (`attachments/attachments` `blobKey`,
+  `attachments/backups`, `mail-in/inbound-raw` and
+  `mail-out/outbound-queue` `rawBlobKey`): restore the file and the
+  document from the SAME snapshot, the file first (a plain copy with
+  Platform's `plat-atlas-restore copy`), then the document. A file alone
+  may be restored while its document is still there; check it against the
+  document's `sha256` or `size`.
+- **Links between roots:** a `messaging` message's `attachment-uses` name
+  `att_` ids in the `attachments` root; restore a missing attachment with
+  its file. `search` and `notify` need no restore for one document; they
+  are refilled from events.
+- **Keycloak:** copy the `.backup` copy from the snapshot back to
+  `MESAIL_KEYCLOAK_DATA` while Keycloak is stopped. Restoring it keeps
+  every person's id; a person re-created by hand in Keycloak is a new,
+  unknown person to Mesail (CONTRACTS.md "identity").
+
+### 7.5 After a restore
+1. Open each restored root normally, so FYLO's recovery runs.
+2. `fylo verify --root <root>`. It also reports a broken link between a
+   FYLO document and a FYLO file record as `EFILELINK` with both paths.
+3. Mesail's blob check (K31): every `blobKey` and `rawBlobKey` names a file
+   that exists and matches the document's `sha256` or `size`.
+4. `rebuildCollection` only for the collections that verify reports, then
+   `fylo verify --root <root>` again until it exits 0.
+5. Start Keycloak, `realtime`, the router, the SMTP edge, then the
+   schedulers. The restored lease names an old owner: the first new owner
+   takes over after 20 s, or at once on the same machine when the old
+   process is gone.
+6. Sign one person in, and open one restored message with its attachment.
+If a check fails, Platform puts back the data kept before the restore.
+
+### 7.6 Before go-live
+- FYLO's next release (network roots with leases) is pinned, together
+  with K30 (SLICES K30).
+- The cold first store call after a start, measured on the production host
+  against the ATLAS folders, fits the callers' limits (identity's 10 s per
+  call to directory).
+- One restore drill on a HANGAR test image, never over live data, with the
+  time of each step written here.
+- Space: at about 10 people (about 12 GB a month) ATLAS is full in about
+  11 months without retention. If the user chooses retention, K32 runs in
+  production before month 7.
+- K33's flow tests pass (SLICES K33).
+
+### 7.7 Known risks
+- ATLAS SSD read errors (2026-11-17): disk replaced, confirmation pending
+  from Platform.
+- The `async` export can lose the last seconds of writes (7.2).
+- The HAVEN copy reaches HAVEN's limits in about 20 months without a
+  retention rule (PLAT-19).
 
 ## 8. Checks
 
