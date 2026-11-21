@@ -18,7 +18,7 @@ type streamTicket struct {
 	Ticket string `json:"ticket"`
 }
 
-func realtimeWait() time.Duration {
+func drainOnWritePlusOneRelayTick() time.Duration {
 	return 75 * time.Second
 }
 
@@ -57,7 +57,7 @@ func connectSocket(t *testing.T, stack Stack, tokens tokenSource, deviceId strin
 
 func awaitSocketEvent(t *testing.T, client *SocketClient, tokens tokenSource, matches func(SocketEvent) bool) SocketEvent {
 	t.Helper()
-	deadline := time.Now().Add(realtimeWait())
+	deadline := time.Now().Add(drainOnWritePlusOneRelayTick())
 	for time.Now().Before(deadline) {
 		event, open := client.NextEvent(t, time.Until(deadline))
 		answerReauth(t, client, tokens, event)
@@ -65,7 +65,7 @@ func awaitSocketEvent(t *testing.T, client *SocketClient, tokens tokenSource, ma
 			return expectOpen(t, client, event, open)
 		}
 	}
-	t.Fatalf("no matching socket frame within %s", realtimeWait())
+	t.Fatalf("no matching socket frame within %s", drainOnWritePlusOneRelayTick())
 	return SocketEvent{}
 }
 

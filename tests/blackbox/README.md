@@ -125,11 +125,13 @@ slice K33) prove whole flows end to end for the integration run
   code is never reused by accident.
 - Mail out: an email to `eve@example.org` must reach status `sent` on
   Ana's message and arrive; an unknown mailbox in `example.org` must be
-  reported `bounced`; an email to an outside address must leave `queued`
-  (`deferred` on Floci, where mail-out has no relay). They wait up to 150
-  seconds (the delivery job runs on the scheduler).
-- Notify uses `ana` and `bo`; the mute test makes a new person, so the
-  fixtures' settings never change. Waits are 30 seconds.
+  reported `bounced`; an email to an outside address must become
+  `deferred` (Floci's mail-out has no relay; a relay sink and real outside
+  delivery come with slice K34). They wait up to 150 seconds (the delivery
+  job runs on the scheduler).
+- Notify uses `ana` and `bo`; the mute test makes two new people (one
+  mutes, one is the control that must be notified), so the fixtures'
+  settings never change. Waits are 30 seconds.
 - Devicebox makes two new people per test, each with one first device
   (no signature needed), and deletes the devices at the end.
 - Realtime opens the socket at `<MESAIL_BASE_URL>/api/v1/realtime/socket`
