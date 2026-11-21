@@ -101,6 +101,21 @@ func TestEveryInvalidCaseHasItsOwnMailInNumber(t *testing.T) {
 	check(t, Invalid{}.Size().Number() == 2506, "want 2506")
 	check(t, Invalid{}.SenderDomainNotHosted().Number() == 2507, "want 2507")
 	check(t, Invalid{}.NoRawMessage().Number() == 2508, "want 2508")
+	check(t, Invalid{}.HandOffRecipients().Number() == 2516, "want 2516")
+}
+
+func TestCheckRefusesAHandoffWithTwoRecipients(t *testing.T) {
+	envelope := handoff("example.com/outbound-1", "ana@example.com")
+	envelope.Recipients = []string{"bob@example.org", "eve@example.org"}
+	check(t, checkedCase(envelope) == Invalid{}.HandOffRecipients(), "want Invalid{}.HandOffRecipients")
+	check(t, Invalid{}.HandOffRecipients().Field == "recipients", "want the recipients field")
+}
+
+func TestCheckAcceptsAnEdgeMessageWithTwoRecipients(t *testing.T) {
+	envelope := testEnvelope("example.com", "example.com/inbound-1")
+	envelope.Recipients = []string{"ana@example.com", "eve@example.com"}
+	_, err := EnvelopeRules{}.Check(envelope)
+	check(t, err == nil, "an edge message with two recipients was refused")
 }
 
 func TestEveryMissingCaseHasItsOwnMailInNumber(t *testing.T) {
@@ -108,4 +123,6 @@ func TestEveryMissingCaseHasItsOwnMailInNumber(t *testing.T) {
 	check(t, Missing{}.NoInboundMessage().Number() == 2511, "want 2511")
 	check(t, Missing{}.NoDeadLetter("gone", 15).Number() == 15, "want the kit number")
 	check(t, Missing{}.NoOutboxDocument().Number() == 2513, "want 2513")
+	check(t, Missing{}.UnknownRecipient().Number() == 2515, "want 2515")
+	check(t, Missing{}.UnknownRecipient().Field == "recipients", "want the recipients field")
 }

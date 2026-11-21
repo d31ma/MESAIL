@@ -22,6 +22,11 @@ func (test *InboundErrorHandlerTest) TestMissingAnswersNotFoundWithTheNumber() {
 	Assert.Equals(ApiError{Code: "not_found", Message: "[MS2513]: no such outbox document"}, answer)
 }
 
+func (test *InboundErrorHandlerTest) TestMissingAnswersNotFoundWithTheField() {
+	answer := (&InboundErrorHandler{}).Missing(&NotFound{Message: "no mailbox has this address", ErrorNumber: 2515, Field: "recipients"})
+	Assert.Equals(ApiError{Code: "not_found", Message: "[MS2515]: no mailbox has this address", Field: "recipients"}, answer)
+}
+
 func (test *InboundErrorHandlerTest) TestUnavailableAnswersUnavailableWithTheNumber() {
 	answer := (&InboundErrorHandler{}).Unavailable(&StorageUnavailable{Operation: "insert /secret/path"})
 	Assert.Equals(ApiError{Code: "unavailable", Message: "[MS2514]: Inbound storage is not available. Try again later."}, answer)

@@ -50,6 +50,13 @@ func TestTheFactoryWiresTheDirectoryIntoTheInbox(t *testing.T) {
 	check(t, keepAlivesOff(directory.Client), "the directory client keeps connections alive")
 }
 
+func TestTheFactoryWiresTheDirectoryAsTheAddressBook(t *testing.T) {
+	memory := newMemory()
+	inbox := DeskFactory{Environment: goodSettings()}.Inbox(memory, memory.Page)
+	addresses, isDirectory := inbox.HandOff.Addresses.(Directory)
+	check(t, isDirectory && addresses.Client.Timeout == DeskFactory{}.Timeout(), "want the directory client")
+}
+
 func keepAlivesOff(client *http.Client) bool {
 	own, isTransport := client.Transport.(*http.Transport)
 	return isTransport && own.DisableKeepAlives && own != http.DefaultTransport

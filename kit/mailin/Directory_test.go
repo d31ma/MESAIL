@@ -68,6 +68,57 @@ func TestTheDirectoryFailsWhenNothingAnswers(t *testing.T) {
 	check(t, err != nil, "want a failure")
 }
 
+func knownAddress(t *testing.T, status int, body string) (bool, error, []string) {
+	server, seen := directoryServer(t, status, body)
+	known, err := Directory{Client: server.Client(), BaseUrl: server.URL + "/", Authorize: realmToken}.KnownAddress("ana@example.org")
+	return known, err, *seen
+}
+
+func TestTheDirectoryKnowsAnAddress(t *testing.T) {
+	known, err, seen := knownAddress(t, http.StatusOK, `{"address":"ana@example.org","domainId":"example.org","kind":"alias","targetId":"per_1"}`)
+	check(t, err == nil && known, "want a known address")
+	check(t, seen[0] == "/api/v1/directory/addresses/ana@example.org Bearer token-for-*", "wrong request")
+}
+
+func TestTheDirectoryReportsAnUnknownAddress(t *testing.T) {
+	known, err, _ := knownAddress(t, http.StatusNotFound, `{"code":"not_found"}`)
+	check(t, err == nil && !known, "want an unknown address")
+}
+
+func TestTheDirectoryReportsAnAddressOfADomainThatIsNotHosted(t *testing.T) {
+	known, err, _ := knownAddress(t, http.StatusNotFound, `{"code":"domain_not_hosted"}`)
+	check(t, err == nil && !known, "want an unknown address")
+}
+
+func TestTheDirectoryFailsOnANotFoundWithAnotherCode(t *testing.T) {
+	_, err, _ := knownAddress(t, http.StatusNotFound, `{"code":"something_else"}`)
+	check(t, err != nil, "want a failure")
+}
+
+func TestTheDirectoryFailsOnANotFoundWithoutABody(t *testing.T) {
+	_, err, _ := knownAddress(t, http.StatusNotFound, "")
+	check(t, err != nil, "want a failure")
+}
+
+func TestTheDirectoryFailsOnAnAddressWithAnotherStatus(t *testing.T) {
+	_, err, _ := knownAddress(t, http.StatusServiceUnavailable, "")
+	check(t, err != nil, "want a failure")
+}
+
+func TestTheDirectoryAsksForNoAddressWithoutAToken(t *testing.T) {
+	server, seen := directoryServer(t, http.StatusOK, "{}")
+	refuse := func(realm string) (string, error) { return "", errors.New("no token") }
+	_, err := Directory{Client: server.Client(), BaseUrl: server.URL, Authorize: refuse}.KnownAddress("ana@example.org")
+	check(t, err != nil && len(*seen) == 0, "want a failure before any request")
+}
+
+func TestTheDirectoryFailsWhenNothingAnswersForAnAddress(t *testing.T) {
+	server, _ := directoryServer(t, http.StatusOK, "{}")
+	server.Close()
+	_, err := Directory{Client: http.DefaultClient, BaseUrl: server.URL, Authorize: realmToken}.KnownAddress("ana@example.org")
+	check(t, err != nil, "want a failure")
+}
+
 func TestDomainTokensAskTheRealmOfTheDomain(t *testing.T) {
 	token, err := DomainTokens{Authorize: realmToken}.TokenFor("example.com")
 	check(t, err == nil && token == "token-for-example.com", "wrong token")

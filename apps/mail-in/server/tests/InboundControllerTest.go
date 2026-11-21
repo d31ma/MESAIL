@@ -156,6 +156,66 @@ func (test *InboundControllerTest) TestAHandOffIsStoredUnderTheRecipientDomainAf
 	Assert.Equals(copied, world.Stored(copied).RawBlobKey)
 	Assert.Equals("raw hand-off", world.ReadBlob(copied))
 	Assert.Equals(world.Sender+" "+oidc.InstallWide{}.DomainId(), world.Asked()[0])
+	Assert.Equals(world.Member()+" "+oidc.InstallWide{}.DomainId(), world.AskedAddresses()[0])
+}
+
+func (test *InboundControllerTest) TestAHandOffToAnUnknownMailboxIsRefusedAndNothingIsStored() {
+	world := InboundTestSetup{}.World()
+	world.UseServices()
+	defer world.Cleanup()
+	envelope := world.HandOffTo(world.Unknown())
+	_, err := world.Inbound.PostMessage(envelope)
+	Assert.IsTrue(world.IsNotFound(err), "want NotFound")
+	Assert.Equals(2515, world.ErrorNumber(err))
+	Assert.Equals("recipients", world.NotFoundField(err))
+	Assert.IsTrue(!world.CopyExists(envelope), "the blob was copied")
+	Assert.Equals("", world.Stored(mailin.BlobKeys{}.HandOffCopy(world.Domain, envelope.RawBlobKey).Path()).ID)
+	Assert.Equals(0, len(world.PushedToMessaging()))
+}
+
+func (test *InboundControllerTest) TestAHandOffToAnAliasIsAccepted() {
+	world := InboundTestSetup{}.World()
+	world.UseServices()
+	defer world.Cleanup()
+	accepted, err := world.Inbound.PostMessage(world.HandOffTo(world.Alias()))
+	Assert.IsTrue(err == nil, "the alias was refused")
+	Assert.IsTrue(strings.HasPrefix(accepted.InboundId, "in_"), "want an inbound id")
+}
+
+func (test *InboundControllerTest) TestAHandOffWithTwoRecipientsIsRefused() {
+	world := InboundTestSetup{}.World()
+	world.UseServices()
+	defer world.Cleanup()
+	envelope := world.HandOffTo(world.Member(), world.Alias())
+	_, err := world.Inbound.PostMessage(envelope)
+	Assert.IsTrue(world.IsInvalid(err), "want InvalidEnvelope")
+	Assert.Equals("recipients", world.InvalidField(err))
+	Assert.Equals(2516, world.ErrorNumber(err))
+	Assert.IsTrue(!world.CopyExists(envelope), "the blob was copied")
+}
+
+func (test *InboundControllerTest) TestAHandOffIsUnavailableWhenTheDirectoryIsDown() {
+	world := InboundTestSetup{}.World()
+	world.UseServices()
+	defer world.Cleanup()
+	envelope := world.HandOffTo(world.DirectoryDown())
+	_, err := world.Inbound.PostMessage(envelope)
+	var failure *StorageUnavailable
+	Assert.IsTrue(errors.As(err, &failure), "want StorageUnavailable")
+	Assert.Equals(2514, world.ErrorNumber(err))
+	Assert.IsTrue(!world.CopyExists(envelope), "the blob was copied")
+}
+
+func (test *InboundControllerTest) TestAnEdgeMessageToAnUnknownMailboxIsNotCheckedAgain() {
+	world := InboundTestSetup{}.World()
+	world.UseServices()
+	defer world.Cleanup()
+	envelope := world.Envelope(world.FreshKey())
+	envelope.Recipients = []string{world.Unknown()}
+	world.WriteBlob(envelope.RawBlobKey, world.TextMessage())
+	_, err := world.Inbound.PostMessage(envelope)
+	Assert.IsTrue(err == nil, "the edge message was refused")
+	Assert.Equals(0, len(world.AskedAddresses()))
 }
 
 func (test *InboundControllerTest) TestAHandOffFromAnInactiveDomainIsRefused() {

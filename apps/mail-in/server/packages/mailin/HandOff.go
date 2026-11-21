@@ -7,8 +7,9 @@ import (
 )
 
 type HandOff struct {
-	Domains Domains
-	Blobs   blobs.Store
+	Domains   Domains
+	Addresses Addresses
+	Blobs     blobs.Store
 }
 
 func (handOff HandOff) Received(envelope Envelope, domainId string) (Envelope, error) {
@@ -20,6 +21,10 @@ func (handOff HandOff) Received(envelope Envelope, domainId string) (Envelope, e
 
 func (handOff HandOff) copied(envelope Envelope, domainId string) (Envelope, error) {
 	err := handOff.checkSender(EnvelopeRules{}.DomainOf(envelope.EnvelopeFrom))
+	if err != nil {
+		return Envelope{}, err
+	}
+	err = handOff.checkRecipient(envelope.Recipients[0])
 	if err != nil {
 		return Envelope{}, err
 	}
@@ -38,6 +43,21 @@ func (handOff HandOff) checkSender(domainId string) error {
 		return Unavailable{Operation: "directory"}
 	}
 	return handOff.hosted(domain, found)
+}
+
+func (handOff HandOff) checkRecipient(address string) error {
+	known, err := handOff.Addresses.KnownAddress(address)
+	if err != nil {
+		return Unavailable{Operation: "directory"}
+	}
+	return handOff.mailbox(known)
+}
+
+func (HandOff) mailbox(known bool) error {
+	if known {
+		return nil
+	}
+	return Missing{}.UnknownRecipient()
 }
 
 func (HandOff) hosted(domain Domain, found bool) error {

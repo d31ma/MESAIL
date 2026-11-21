@@ -329,6 +329,8 @@ keeps its row, marked "retired".
 | MS2512 | mail-in | 404 | `not_found` | no such dead letter | retired (E12): now MS0015; was: a requeue names a dead letter that does not exist |
 | MS2513 | mail-in | 404 | `not_found` | no such outbox document | a requeue names an outbox document that does not exist |
 | MS2514 | mail-in | 503 | `unavailable` | Inbound storage is not available. Try again later. | the inbound store, the blob store or the directory failed, or a blob setting still names the removed S3 adapter or a bucket (slice OP6; the log names the setting) |
+| MS2515 | mail-in | 404 | `not_found` | no mailbox has this address | a hand-off to an address the directory does not know, or in a domain that is not hosted or not active (`field` `recipients`, slice K36); nothing is stored and `mail-out` reports the delivery `bounced` 550 5.1.1 |
+| MS2516 | mail-in | 400 | `invalid_request` | a hand-off carries exactly one recipient | a hand-off with no recipient or more than one (`field` `recipients`, slice K36) |
 | MS3000 | mail-out | 500 | `unavailable` | Something went wrong. | an unexpected error in `mail-out` |
 | MS3001 | mail-out | 400 | `invalid_request` | Why the event is refused, for example "the event envelope is not valid: eventId must not be empty". | retired (E12): now MS0001-MS0011 and MS0013; was: a refused event by a rule of the shared `kit/events` (bad envelope, wrong producer, a type mail-out does not consume) |
 | MS3002 | mail-out | 403 | `forbidden` | Only a caller with the Service role may deliver events. | retired (E12): now MS0012; was: the caller of the events route is not a service |

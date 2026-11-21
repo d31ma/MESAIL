@@ -13,6 +13,10 @@ func (rules EnvelopeRules) Check(envelope Envelope) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	err = rules.checkHandoffCount(envelope)
+	if err != nil {
+		return "", err
+	}
 	domainId, err := rules.oneDomain(envelope.Recipients)
 	if err != nil {
 		return "", err
@@ -43,6 +47,13 @@ func (rules EnvelopeRules) DomainOf(address string) string {
 func (rules EnvelopeRules) checkCount(recipients []string) error {
 	if len(recipients) == 0 || len(recipients) > rules.MaxRecipients() {
 		return Invalid{}.RecipientCount()
+	}
+	return nil
+}
+
+func (EnvelopeRules) checkHandoffCount(envelope Envelope) error {
+	if envelope.AuthResults.Handoff && len(envelope.Recipients) != 1 {
+		return Invalid{}.HandOffRecipients()
 	}
 	return nil
 }

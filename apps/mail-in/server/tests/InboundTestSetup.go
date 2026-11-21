@@ -24,22 +24,23 @@ import (
 
 // @TestSetup
 type InboundTestSetup struct {
-	Domain      string
-	Sender      string
-	Retired     string
-	Other       string
-	Pusher      *outbox.RecordingPusher
-	Workflows   *WorkflowService
-	Inbound     *InboundController
-	Outbox      *OutboxController
-	server      *httptest.Server
-	realm       oidc.SigningRealm
-	lock        sync.Mutex
-	asked       []string
-	savedJson   string
-	savedTemp   string
-	tokenFolder string
-	blobFolder  string
+	Domain         string
+	Sender         string
+	Retired        string
+	Other          string
+	Pusher         *outbox.RecordingPusher
+	Workflows      *WorkflowService
+	Inbound        *InboundController
+	Outbox         *OutboxController
+	server         *httptest.Server
+	realm          oidc.SigningRealm
+	lock           sync.Mutex
+	asked          []string
+	askedAddresses []string
+	savedJson      string
+	savedTemp      string
+	tokenFolder    string
+	blobFolder     string
 }
 
 func (InboundTestSetup) Configure(execution *BehaviorExecution) (*BehaviorConfiguration, error) {
@@ -157,6 +158,7 @@ func (world *InboundTestSetup) UseServices() {
 	world.realm.Publish(time.Now())
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/directory/domains/{domainId}", world.directory)
+	mux.HandleFunc("GET /api/v1/directory/addresses/{address}", world.directoryAddress)
 	mux.HandleFunc("POST /api/v1/identity/service-token", world.identityServiceToken)
 	world.server = httptest.NewServer(mux)
 	world.writeSettings()
@@ -209,6 +211,69 @@ func (world *InboundTestSetup) directory(writer http.ResponseWriter, request *ht
 		return
 	}
 	json.NewEncoder(writer).Encode(mailin.Domain{DomainId: domainId, Name: domainId, State: states[domainId]})
+}
+
+func (world *InboundTestSetup) directoryAddress(writer http.ResponseWriter, request *http.Request) {
+	caller, _ := oidc.Configured().Identify(request.Header.Get("Authorization"))
+	address := request.PathValue("address")
+	world.lock.Lock()
+	world.askedAddresses = append(world.askedAddresses, address+" "+caller.DomainId)
+	world.lock.Unlock()
+	kinds := map[string]string{world.Member(): "person", world.Alias(): "alias"}
+	if address == world.DirectoryDown() {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	if kinds[address] == "" {
+		writer.WriteHeader(http.StatusNotFound)
+		writer.Write([]byte(`{"code":"not_found","message":"[MS1015]: Not found."}`))
+		return
+	}
+	json.NewEncoder(writer).Encode(map[string]string{"address": address, "domainId": world.Domain, "kind": kinds[address], "targetId": "per_1"})
+}
+
+func (world *InboundTestSetup) Member() string {
+	return "ana@" + world.Domain
+}
+
+func (world *InboundTestSetup) Alias() string {
+	return "sales@" + world.Domain
+}
+
+func (world *InboundTestSetup) Unknown() string {
+	return "nobody-" + world.RandomText() + "@" + world.Domain
+}
+
+func (world *InboundTestSetup) DirectoryDown() string {
+	return "down@" + world.Domain
+}
+
+func (world *InboundTestSetup) AskedAddresses() []string {
+	world.lock.Lock()
+	defer world.lock.Unlock()
+	return append([]string{}, world.askedAddresses...)
+}
+
+func (world *InboundTestSetup) HandOffTo(recipients ...string) InboundEnvelope {
+	envelope := world.HandOff(world.Sender)
+	envelope.Recipients = recipients
+	world.WriteBlob(envelope.RawBlobKey, "raw hand-off")
+	return envelope
+}
+
+func (world *InboundTestSetup) CopyExists(envelope InboundEnvelope) bool {
+	copied := mailin.BlobKeys{}.HandOffCopy(world.Domain, envelope.RawBlobKey)
+	reader, err := world.Blobs().Read(copied)
+	if err == nil {
+		reader.Close()
+	}
+	return err == nil
+}
+
+func (world *InboundTestSetup) NotFoundField(err error) string {
+	failure := &NotFound{}
+	errors.As(err, &failure)
+	return failure.Field
 }
 
 func (world *InboundTestSetup) serviceToken(domainId string) string {

@@ -3,6 +3,11 @@ package mailin
 type Missing struct {
 	Message     string
 	ErrorNumber int
+	Field       string
+}
+
+func (Missing) UnknownRecipient() Missing {
+	return Missing{Message: "no mailbox has this address", ErrorNumber: 2515, Field: "recipients"}
 }
 
 func (Missing) NoOutboxCollection() Missing {

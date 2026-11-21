@@ -22,6 +22,10 @@ func (Invalid) HandOffSender() Invalid {
 	return Invalid{Field: "headers.from", Reason: "a hand-off must come from an address of the sender domain", ErrorNumber: 2504}
 }
 
+func (invalid Invalid) HandOffRecipients() Invalid {
+	return Invalid{Field: invalid.recipientsField(), Reason: "a hand-off carries exactly one recipient", ErrorNumber: 2516}
+}
+
 func (invalid Invalid) BlobKeyOwner() Invalid {
 	return Invalid{Field: invalid.rawBlobKeyField(), Reason: "the raw blob key must be a blob of the domain that owns it", ErrorNumber: 2505}
 }

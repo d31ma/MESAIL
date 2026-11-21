@@ -298,15 +298,23 @@ func (memory *memoryBlobs) Delete(key blobs.Key) error {
 }
 
 type fakeDomains struct {
-	domains map[string]Domain
-	failure error
-	asked   []string
+	domains        map[string]Domain
+	failure        error
+	asked          []string
+	known          map[string]bool
+	addressFailure error
+	askedAddresses []string
 }
 
 func (fake *fakeDomains) Domain(domainId string) (Domain, bool, error) {
 	fake.asked = append(fake.asked, domainId)
 	domain, found := fake.domains[domainId]
 	return domain, found, fake.failure
+}
+
+func (fake *fakeDomains) KnownAddress(address string) (bool, error) {
+	fake.askedAddresses = append(fake.askedAddresses, address)
+	return fake.known[address], fake.addressFailure
 }
 
 type fakeCallers struct {
@@ -325,12 +333,12 @@ func activeDomains(names ...string) *fakeDomains {
 	for _, name := range names {
 		domains[name] = Domain{DomainId: name, Name: name, State: "active"}
 	}
-	return &fakeDomains{domains: domains}
+	return &fakeDomains{domains: domains, known: map[string]bool{"ana@example.com": true}}
 }
 
-func handOffInbox(memory *memoryDocuments, store *memoryBlobs, domains Domains) Inbox {
+func handOffInbox(memory *memoryDocuments, store *memoryBlobs, domains *fakeDomains) Inbox {
 	inbox := testInbox(memory, outbox.NewRecordingPusher(), goodSettings())
-	inbox.HandOff = HandOff{Domains: domains, Blobs: store}
+	inbox.HandOff = HandOff{Domains: domains, Addresses: domains, Blobs: store}
 	inbox.Contents = testShelf(memory, store)
 	return inbox
 }

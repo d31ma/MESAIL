@@ -21,11 +21,7 @@ func (Directory) InstallWide() string {
 }
 
 func (directory Directory) Domain(domainId string) (Domain, bool, error) {
-	request, err := directory.request(domainId)
-	if err != nil {
-		return Domain{}, false, err
-	}
-	response, err := directory.Client.Do(request)
+	response, err := directory.send(directory.domainUrl(domainId))
 	if err != nil {
 		return Domain{}, false, err
 	}
@@ -33,12 +29,29 @@ func (directory Directory) Domain(domainId string) (Domain, bool, error) {
 	return directory.answer(response)
 }
 
-func (directory Directory) request(domainId string) (*http.Request, error) {
+func (directory Directory) KnownAddress(address string) (bool, error) {
+	response, err := directory.send(directory.addressUrl(address))
+	if err != nil {
+		return false, err
+	}
+	defer response.Body.Close()
+	return directory.addressAnswer(response)
+}
+
+func (directory Directory) send(target string) (*http.Response, error) {
+	request, err := directory.request(target)
+	if err != nil {
+		return nil, err
+	}
+	return directory.Client.Do(request)
+}
+
+func (directory Directory) request(target string) (*http.Request, error) {
 	authorization, err := directory.Authorize(directory.InstallWide())
 	if err != nil {
 		return nil, err
 	}
-	request, err := http.NewRequest(http.MethodGet, directory.address(domainId), nil)
+	request, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +59,16 @@ func (directory Directory) request(domainId string) (*http.Request, error) {
 	return request, nil
 }
 
-func (directory Directory) address(domainId string) string {
-	return strings.TrimRight(directory.BaseUrl, "/") + "/api/v1/directory/domains/" + url.PathEscape(strings.ToLower(domainId))
+func (directory Directory) domainUrl(domainId string) string {
+	return directory.base() + "/api/v1/directory/domains/" + url.PathEscape(strings.ToLower(domainId))
+}
+
+func (directory Directory) addressUrl(address string) string {
+	return directory.base() + "/api/v1/directory/addresses/" + url.PathEscape(address)
+}
+
+func (directory Directory) base() string {
+	return strings.TrimRight(directory.BaseUrl, "/")
 }
 
 func (directory Directory) answer(response *http.Response) (Domain, bool, error) {
@@ -57,7 +78,34 @@ func (directory Directory) answer(response *http.Response) (Domain, bool, error)
 	case http.StatusNotFound:
 		return Domain{}, false, nil
 	}
-	return Domain{}, false, fmt.Errorf("the directory answered %d", response.StatusCode)
+	return Domain{}, false, directory.unexpected(response.StatusCode)
+}
+
+func (directory Directory) addressAnswer(response *http.Response) (bool, error) {
+	switch response.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return directory.notFoundAddress(response.Body)
+	}
+	return false, directory.unexpected(response.StatusCode)
+}
+
+func (directory Directory) notFoundAddress(body io.Reader) (bool, error) {
+	answer := DirectoryAnswer{}
+	json.NewDecoder(io.LimitReader(body, directory.readLimit())).Decode(&answer)
+	return false, directory.unknownUnless(answer)
+}
+
+func (directory Directory) unknownUnless(answer DirectoryAnswer) error {
+	if answer.IsUnknownAddress() {
+		return nil
+	}
+	return fmt.Errorf("the directory answered %d with code %q", http.StatusNotFound, answer.Code)
+}
+
+func (Directory) unexpected(status int) error {
+	return fmt.Errorf("the directory answered %d", status)
 }
 
 func (directory Directory) decoded(body io.Reader) (Domain, bool, error) {

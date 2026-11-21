@@ -21,7 +21,7 @@ func (service *FailureService) translated(failed error) error {
 	case errors.As(failed, &invalid):
 		return &InvalidEnvelope{Field: invalid.Field, Reason: invalid.Reason, ErrorNumber: invalid.Number()}
 	case errors.As(failed, &missing):
-		return &NotFound{Message: missing.Message, ErrorNumber: missing.Number()}
+		return &NotFound{Message: missing.Message, ErrorNumber: missing.Number(), Field: missing.Field}
 	case errors.Is(failed, mailin.Unauthenticated{}):
 		return &Unauthenticated{}
 	}

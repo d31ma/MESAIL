@@ -65,3 +65,49 @@ func TestAnEdgeMessageIsNotCopied(t *testing.T) {
 	check(t, err == nil && envelope.RawBlobKey == "example.com/inbound-1", "the key changed")
 	check(t, len(domains.asked) == 0, "the directory was asked")
 }
+
+func TestAHandOffAsksTheDirectoryForTheRecipient(t *testing.T) {
+	store, domains := newBlobs(), activeDomains("sender.test")
+	store.objects["sender.test/inbound-1"] = []byte("raw")
+	_, err := handOffInbox(newMemory(), store, domains).Accept(handOffEnvelope("sender.test/inbound-1"))
+	check(t, err == nil, "a known recipient was refused")
+	check(t, len(domains.askedAddresses) == 1 && domains.askedAddresses[0] == "ana@example.com", "want the recipient checked")
+}
+
+func TestAHandOffToAnUnknownRecipientIsRefusedBeforeTheCopy(t *testing.T) {
+	memory, store, domains := newMemory(), newBlobs(), activeDomains("sender.test")
+	domains.known = map[string]bool{}
+	store.objects["sender.test/inbound-1"] = []byte("raw")
+	_, err := handOffInbox(memory, store, domains).Accept(handOffEnvelope("sender.test/inbound-1"))
+	check(t, missingCase(err) == Missing{}.UnknownRecipient(), "want Missing{}.UnknownRecipient")
+	check(t, len(store.objects) == 1, "nothing may be copied")
+	check(t, memory.created == 0 && len(memory.collections) == 0, "nothing may be stored")
+}
+
+func TestADirectoryFailureForTheRecipientMakesTheHandOffUnavailable(t *testing.T) {
+	store, domains := newBlobs(), activeDomains("sender.test")
+	domains.addressFailure = errors.New("down")
+	store.objects["sender.test/inbound-1"] = []byte("raw")
+	_, err := handOffInbox(newMemory(), store, domains).Accept(handOffEnvelope("sender.test/inbound-1"))
+	check(t, isUnavailable(err, "directory"), "want directory unavailable")
+	check(t, len(store.objects) == 1, "nothing may be copied")
+}
+
+func TestAHandOffWithTwoRecipientsIsRefused(t *testing.T) {
+	store, domains := newBlobs(), activeDomains("sender.test")
+	domains.known["eve@example.com"] = true
+	store.objects["sender.test/inbound-1"] = []byte("raw")
+	envelope := handOffEnvelope("sender.test/inbound-1")
+	envelope.Recipients = []string{"ana@example.com", "eve@example.com"}
+	_, err := handOffInbox(newMemory(), store, domains).Accept(envelope)
+	check(t, invalidCase(err) == Invalid{}.HandOffRecipients(), "want Invalid{}.HandOffRecipients")
+	check(t, len(domains.askedAddresses) == 0 && len(store.objects) == 1, "nothing may be asked or copied")
+}
+
+func TestAnEdgeMessageToAnyRecipientIsNotChecked(t *testing.T) {
+	domains := activeDomains()
+	domains.known = map[string]bool{}
+	envelope, err := HandOff{Domains: domains, Addresses: domains, Blobs: newBlobs()}.Received(testEnvelope("example.com", "example.com/inbound-1"), "example.com")
+	check(t, err == nil && envelope.RawBlobKey == "example.com/inbound-1", "the edge message changed")
+	check(t, len(domains.askedAddresses) == 0, "the directory was asked for the recipient")
+}

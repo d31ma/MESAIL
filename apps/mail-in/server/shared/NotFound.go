@@ -1,6 +1,7 @@
 type NotFound struct {
 	Message     string
 	ErrorNumber int
+	Field       string
 }
 
 func (failure *NotFound) Error() string {

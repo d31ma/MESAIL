@@ -1433,11 +1433,26 @@ owns it; M3 uses it):
     unknown or inactive sender domain answers `400 invalid_request`
     (field `envelopeFrom`), a directory failure `503`. The copy's key is
     `<recipientDomain>/inbound-<sha256 hex of the sender key>`.
+  - A hand-off carries exactly ONE recipient (`mail-out` sends one per
+    outbound item); none or more answers `400 invalid_request` (field
+    `recipients`, MS2516). Before it copies the blob or stores anything,
+    mail-in looks the recipient up with the edge's own call
+    (`GET /api/v1/directory/addresses/{address}`, the same install-wide
+    token), so aliases and channel addresses count as known. A `404` with
+    code `not_found` (unknown address) or `domain_not_hosted` answers
+    `404 not_found` (field `recipients`, MS2515), and nothing is stored,
+    copied or published; `mail-out` reports the delivery `bounced` 550
+    5.1.1 ("unknown recipient at mail-in"). Any other directory answer (a
+    `404` with another code or none, a 5xx, a timeout) answers `503`
+    (MS2514), which `mail-out` treats as `deferred` and retries. (Slice
+    K36.)
   - Errors: `400 invalid_request` (recipients in more than one domain, a
     `rawBlobKey` outside its owner domain, a hand-off From outside the
-    sender domain, a size out of range), `503
-    unavailable` (storage failed; the edge answers `451` and the sender
-    retries).
+    sender domain, a hand-off without exactly one recipient, a size out of
+    range), `404 not_found` (a hand-off to an unknown recipient; the edge
+    path never answers it, because the edge checks each recipient at
+    RCPT), `503 unavailable` (storage or the directory failed; the edge
+    answers `451` and the sender retries).
   - The same `rawBlobKey` sent again answers the same `inboundId`, so a
     retried SMTP transaction is stored once.
 - After the message is stored, `mail-in` publishes one `email.received`
@@ -1482,4 +1497,9 @@ on both sides. The hand-off (slice M1 accepts it, slice M2 sends it):
   invented SPF, DKIM or DMARC values. mail-in then skips the DNS checks,
   requires that the sender domain is hosted and active (directory) and
   that the `From` domain equals that sender domain, and the UI shows
-  "Sent from <domain> on this server" instead of check badges.
+  "Sent from <domain> on this server" instead of check badges;
+- each hand-off names exactly one recipient, and mail-in checks it with
+  the directory as the edge does at RCPT: an unknown recipient answers
+  `404`, which mail-out reports as `bounced` 550 5.1.1 ("unknown
+  recipient at mail-in"); a directory failure answers `503`, which
+  mail-out reports as `deferred` and retries (slice K36).

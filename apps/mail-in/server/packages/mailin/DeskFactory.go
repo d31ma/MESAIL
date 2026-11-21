@@ -44,7 +44,7 @@ func (DeskFactory) Timeout() time.Duration {
 
 func (factory DeskFactory) handOff() HandOff {
 	directory := Directory{Client: transport.SingleUseTransport{}.Client(factory.Timeout()), BaseUrl: factory.settings().MailIn().Directory, Authorize: factory.settings().Authorize()}
-	return HandOff{Domains: directory, Blobs: factory.blobs()}
+	return HandOff{Domains: directory, Addresses: directory, Blobs: factory.blobs()}
 }
 
 func (factory DeskFactory) blobs() blobs.Store {

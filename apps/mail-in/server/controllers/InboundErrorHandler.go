@@ -21,7 +21,7 @@ func (handler *InboundErrorHandler) Refused(failure *Unauthenticated) ApiError {
 // @HandlesError
 // @ResponseStatus(404)
 func (handler *InboundErrorHandler) Missing(failure *NotFound) ApiError {
-	return ApiError{Code: "not_found", Message: handler.message(failure, failure.Message)}
+	return ApiError{Code: "not_found", Message: handler.message(failure, failure.Message), Field: failure.Field}
 }
 
 // @HandlesError
