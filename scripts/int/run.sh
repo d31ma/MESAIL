@@ -450,6 +450,7 @@ flow_result() {
 coverage_section() {
   local flow pattern
   echo "## Flows on the dev host (Floci blackbox)"
+  wanted_step floci || { echo "The floci step was not asked for in this run; no flow was tested."; return 0; }
   echo "| flow | result | tests |"
   echo "| --- | --- | --- |"
   while IFS="$(printf '\t')" read -r flow pattern; do
