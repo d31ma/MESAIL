@@ -442,8 +442,11 @@ If a check fails, Platform puts back the data kept before the restore.
   228 ms, p95 377 ms): on the production host, measure the commit p50 and
   p95 and run a 10-person load (sends, mark-reads, email in and out). If a
   plain chat send's p95 is over 3 s, or a root is over 70% of its commit
-  rate at peak, SLICES K38 (one FYLO transaction per action) is done
-  before go-live. K37 (at most 25 writes per call) is done in any case.
+  rate at peak, or a read's p95 while events apply is over 5 s, SLICES K38
+  (one FYLO transaction per collection per action) is done before go-live
+  for the bursts; a slow plain send also needs FYLO's cost per commit
+  (K38 saves only one commit there). K37 (at most 25 writes per call) is
+  done in any case.
 - The FYLO release Mesail ships with has `fylo restore-doc`, or the
   whole-collection path of 7.4 is accepted for one-document restores
   (through the hub).
