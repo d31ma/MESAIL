@@ -3340,6 +3340,46 @@ from running workers at all.
   stopped); native runs still run their workers; `git grep` finds no
   `WorkerSwitch` or `kit/scheduling`; `scripts/gates.sh --all` passes.
 
+### K36. mail-in refuses a hand-off to an unknown mailbox (release blocker, about 2-3 hours)
+Found by MSL-K33 (2026-11-21, `k33-bug-handoff-unknown-mailbox.md` in the
+MESAIL Build Coordinator's notes). An email to an unknown mailbox in
+another hosted, active domain goes out through mail-out's internal
+hand-off (`POST /api/v1/mail-in/messages`, `handoff: true`). mail-in checks
+only the sender side there and answers `201`, so the sender sees `sent`
+("accepted by mail-in") and nobody receives the email. The SMTP edge
+checks every recipient at RCPT; the hand-off checks none.
+- **Decision (mesail-arch, 2026-11-21): mail-in checks the recipient**
+  (option a). mail-in owns its mailboxes and the acceptance of mail, it
+  uses the same check as the edge, and mail-out already maps a mail-in
+  `404` to `bounced` 550 5.1.1 (`OutcomeRules.handOffAnswers`). Not option
+  b (mail-out looks the address up itself): that would put a second copy
+  of mail-in's acceptance rule in the transport, and the edge path would
+  still differ.
+- **Contract** (CONTRACTS.md "mail-in", internal hand-off):
+  - a hand-off carries exactly ONE recipient (mail-out already sends one
+    per outbound item); more than one answers `400 invalid_request`
+    (field `recipients`). So a bounce is always for one recipient, and
+    there is no partial result;
+  - before it copies the blob or stores anything, mail-in looks the
+    recipient up with `GET /api/v1/directory/addresses/{address}` (the
+    edge's call, so aliases and channel addresses count as known). Unknown
+    or not hosted answers `404 not_found` (field `recipients`, a new
+    mail-in code in ERRORS.md, the next free MS25xx), and nothing is
+    stored, copied or published; a directory failure answers `503`
+    (MS2514), which mail-out treats as `deferred` and retries;
+  - the edge path (`handoff: false`) does not change: the edge already
+    checks each recipient at RCPT.
+- **Owns:** mail-in's hand-off route and its tests, CONTRACTS.md (the
+  route's answers), ERRORS.md (the new code); a mail-out test that a
+  hand-off `404` gives `bounced` with 550 5.1.1 and the detail "unknown
+  recipient at mail-in" (the rule exists; only the test may be new).
+- **Done when:** mail-in tests show: unknown recipient `404` with nothing
+  stored and no event; known address and alias `201`; two recipients on a
+  hand-off `400`; directory down `503`. K33's
+  `TestFlowMailOutToAnUnknownMailboxInAHostedDomainIsReportedBounced`
+  passes on the dev host's Floci stack, and the other K33 mail tests still
+  pass.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3384,6 +3424,8 @@ Release blockers:
 - **One-document restore:** the FYLO release Mesail ships with has `fylo
   restore-doc` (FYLO slice L1-10), or the whole-collection restore
   (OPERATIONS.md section 7.4) is accepted through the hub.
+- **K36:** a hand-off to an unknown mailbox in another hosted domain is
+  reported `bounced`, not `sent` (found by K33).
 - **K34:** mail out to an outside address is proven against an SMTP sink
   in the Floci test stack (the release smoke test needs "email out").
 - **K33:** blackbox flow tests for TOTP sign-in, mail out through the
