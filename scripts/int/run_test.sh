@@ -47,6 +47,7 @@ int_test_arguments() {
   int_test_rejects "$work" "a file without its hash" "--ty and --ty-sha256 go together" --ty "$work/ty"
   int_test_rejects "$work" "a short hash" "--fylo-sha256 must be 64 lowercase hex characters" --fylo "$work/ty" --fylo-sha256 abc
   int_test_rejects "$work" "a short DuVay commit" "--duvay must be a full 40-character commit SHA" --duvay e08ae67
+  int_test_rejects "$work" "a bad app list" "--native-apps takes a comma list of app names" --native-apps 'directory;rm'
   int_test_rejects "$work" "an unknown option" "unknown option --fast" --fast
 }
 

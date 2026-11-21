@@ -21,14 +21,22 @@ Builds (each binary is checked by its SHA-256 before use; give a file and its ha
 Run:
   --mesail <ref>           Mesail commit or branch (default origin/develop, after a fetch)
   --steps <list>           comma list of native, a11y, menus, floci (default: all four)
+  --native-apps <list>     native step runs only these apps (gates.sh --apps-only --app <app> each),
+                           for a short smoke run, e.g. the apps that use FYLO
+  --floci-tests <regex>    floci step runs only the blackbox tests matching it (MESAIL_TEST_RUN)
   --keep-worktree          keep the worktree (for debugging)
+
+A released binary is passed like any other build: download the release asset, take its hash
+from the release's checksum file, and give both (for example --fylo-linux <file> --fylo-linux-sha256 <hex>).
 
 Steps:
   native  scripts/gates.sh --all (mac-heavy --needs-screen)
   a11y    tests/responsive for web and web-admin, MESAIL_COLOR_SCHEME light and dark
   menus   the w-menu tests (MESAIL_MENU_TESTS=1) for web and web-admin, light and dark
-  floci   scripts/floci/run-all.sh on the Mesail dev host, images tagged :int-<run>, removed after
-          (ask mesail-devhost for the slot first; the scripts take the mesail-docker lock)
+  floci   scripts/int/floci.sh on the running Mesail dev host (ask mesail-devhost for the slot first):
+          build images tagged :int-<run>, up, deploy, seed, blackbox tests, then only
+          `docker compose stop` (never down.sh: no container, network or volume is removed);
+          the :int-<run> images are removed after
 
 Logs and summary: ~/Library/Logs/local/MESAIL/int/<run>/ (summary.md, steps.tsv, one log per step)
 Worktree: ~/Developer/AnvilTargets/work/MESAIL/<run> from ~/Developer/AnvilTargets/git/MESAIL
@@ -94,6 +102,8 @@ parse_arguments() {
       --duvay) DUVAY_COMMIT="$(option_value "$@")"; shift 2 ;;
       --mesail) MESAIL_REF="$(option_value "$@")"; shift 2 ;;
       --steps) RUN_STEPS="$(option_value "$@")"; shift 2 ;;
+      --native-apps) NATIVE_APPS="$(option_value "$@")"; shift 2 ;;
+      --floci-tests) FLOCI_TESTS="$(option_value "$@")"; shift 2 ;;
       --keep-worktree) KEEP_WORKTREE=1; shift ;;
       -h | --help) usage ;;
       *) fail "unknown option $1 (see --help)" ;;
@@ -115,6 +125,7 @@ check_arguments() {
   paired fylo "${FYLO_MAC:-}" "${FYLO_MAC_SHA256:-}"
   paired fylo-linux "${FYLO_LINUX:-}" "${FYLO_LINUX_SHA256:-}"
   [ -z "${DUVAY_COMMIT:-}" ] || [[ "$DUVAY_COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "--duvay must be a full 40-character commit SHA"
+  [ -z "${NATIVE_APPS:-}" ] || [[ "$NATIVE_APPS" =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || fail "--native-apps takes a comma list of app names"
   [[ "$RUN_STEPS" =~ ^(native|a11y|menus|floci)(,(native|a11y|menus|floci))*$ ]] || fail "--steps takes native, a11y, menus, floci"
 }
 
@@ -237,6 +248,19 @@ native_gates() {
   cd "$WORKTREE" && heavy --needs-screen -- "$WORKTREE/scripts/gates.sh" --all
 }
 
+native_app_gates() {
+  cd "$WORKTREE" && heavy --needs-screen -- "$WORKTREE/scripts/gates.sh" --apps-only --app "$1"
+}
+
+native_steps() {
+  local app status=0
+  if [ -z "${NATIVE_APPS:-}" ]; then run_step native "scripts/gates.sh --all" native_gates; return; fi
+  for app in $(echo "$NATIVE_APPS" | tr ',' ' '); do
+    run_step "native-$app" "scripts/gates.sh --apps-only --app $app" native_app_gates "$app" || status=1
+  done
+  return "$status"
+}
+
 bundle_app() {
   cd "$WORKTREE" && heavy -- "$(chosen_ty)" bundle "$WORKTREE/apps/$1" --target web
 }
@@ -274,8 +298,18 @@ image_tag() {
   echo "$RUN_ID" | tr -cd 'a-z0-9-'
 }
 
+floci_settings() {
+  MESAIL_IMAGE_TAG="$(image_tag)"
+  export MESAIL_OWNER=msl-int MESAIL_LOG_DIR="$RUN_LOGS/floci" MESAIL_IMAGE_TAG MESAIL_NO_PRUNE=1
+  if [ -n "${FLOCI_TESTS:-}" ]; then export MESAIL_TEST_RUN="$FLOCI_TESTS"; fi
+  mkdir -p "$MESAIL_LOG_DIR"
+}
+
 floci_stack() {
-  cd "$WORKTREE" && MESAIL_OWNER=msl-int MESAIL_LOG_DIR="$RUN_LOGS/floci" MESAIL_IMAGE_TAG="$(image_tag)" "$WORKTREE/scripts/floci/run-all.sh"
+  floci_settings
+  cd "$WORKTREE" && heavy -- "$WORKTREE/scripts/floci/run-all.sh" --bundle-only || return 1
+  TACHYON_LOCK_ROOT="$HOME/Library/Caches/mac-locks/mesail-docker" MAC_HEAVY_COORDINATOR=mesail-docker \
+    heavy --weight 1 -- "$WORKTREE/scripts/int/floci.sh"
 }
 
 own_images() {
@@ -293,7 +327,7 @@ remove_own_images() {
 
 floci_steps() {
   wanted_step floci || return 0
-  run_step floci "MESAIL_IMAGE_TAG=$(image_tag) scripts/floci/run-all.sh" floci_stack
+  run_step floci "MESAIL_IMAGE_TAG=$(image_tag) MESAIL_TEST_RUN='${FLOCI_TESTS:-}' scripts/int/floci.sh (after run-all.sh --bundle-only)" floci_stack
   local code=$?
   run_step floci-images "docker rmi <every :$(image_tag) image>" remove_own_images
   return "$code"
@@ -301,7 +335,7 @@ floci_steps() {
 
 run_steps() {
   local status=0
-  if wanted_step native; then run_step native "scripts/gates.sh --all" native_gates || status=1; fi
+  if wanted_step native; then native_steps || status=1; fi
   if wanted_step a11y || wanted_step menus; then browser_steps || status=1; fi
   floci_steps || status=1
   return "$status"
