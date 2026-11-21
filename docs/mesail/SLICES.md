@@ -2971,9 +2971,13 @@ deadline.
   subscribers is answered in about 3 s and keeps the rest pending;
   `scripts/kit-sync.sh --check` passes.
 
-### K26. Sign-in hint contrast, sign-in focus and a real light mode in the responsive tests (backlog, one small session, about 5 hours)
-Found by MSL-DT3 (DuVay d977477, 2026-11-21; no DuVay bug). Three Mesail
+### K26. Sign-in hint contrast and sign-in focus (backlog, one small session, about 3-4 hours)
+Found by MSL-DT3 (DuVay d977477, 2026-11-21; no DuVay bug). Two Mesail
 fixes in one session, part 1 first because it is an accessibility defect.
+Part 3 (a real light mode in `tests/responsive`) moved to MSL-INT's harness
+slice on 2026-11-21 (`MESAIL_COLOR_SCHEME`); MSL-INT also turns the DT3
+and DT4 menu probes into the test `MenuKeyboard`, which is off unless
+`MESAIL_MENU_TESTS=1` until DuVay ships DUVAY-12.
 - **1. Hint contrast (WCAG AA 1.4.3, about 1 hour).** Mesail's own
   `app.css` sets `--w-text-very-subtle: #7b878c` in `:root` and in
   `html[w-theme="light"]` (`apps/web/client/shared/styles/app.css` lines 59
@@ -2996,20 +3000,10 @@ fixes in one session, part 1 first because it is an accessibility defect.
   and web-admin's sign-in view if it has the same pattern. Test: a client
   test, and a responsive or blackbox check that after a wrong sign-in the
   focus stays in the username field.
-- **3. Light mode in `tests/responsive` (about 1-2 hours).** The suite
-  never sets `prefers-color-scheme` for its "light" runs, so on a Mac in
-  dark mode (this one) `TestEveryWidth`, `TestViews .../light` and the
-  others run in DARK mode. DT2's and the gates' "light" runs so far were
-  really dark. In `tests/responsive/Visit.go` `emulate()`, set
-  `prefers-color-scheme: light` when the test sets no scheme (about 7
-  lines; MSL-DT3's patch is in
-  `~/Library/Logs/local/MESAIL/dt3-duvay/probe-source/`). Then run both
-  responsive suites in both modes, and fix or list what the first real
-  light runs find. Say it in `tests/responsive/README.md`.
-- **Done when:** the hints are at least 4.5:1 in light mode (measured);
-  after a wrong sign-in the focus, value and caret stay in the username
-  field; the responsive "light" runs really run in light mode on a Mac in
-  dark mode, and both suites pass in both modes.
+- **Done when:** the hints are at least 4.5:1 in light mode (measured,
+  in a real light run once MSL-INT's `MESAIL_COLOR_SCHEME` is on
+  `develop`); after a wrong sign-in the focus, value and caret stay in the
+  username field.
 
 ### K27. No in-function @Schedule workers in the Lambda profile (Mesail release blocker, one small session, about 2 hours)
 Found by K22 phase 2, try 1 (2026-11-21). The apps' `@Schedule` workers in
