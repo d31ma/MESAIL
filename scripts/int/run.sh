@@ -455,10 +455,19 @@ write_summary() {
   cat "$summary"
 }
 
+stop_run() {
+  trap - INT TERM
+  record_step stopped 130 0 "$RUN_LOGS/steps.tsv" "the run was stopped (INT or TERM)"
+  write_summary
+  clean_up
+  exit 130
+}
+
 main() {
   parse_arguments "$@"
   check_arguments
   start_run
+  trap stop_run INT TERM
   STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S %Z')"
   MACHINE_AT_START="$(machine_state)"
   run_step builds "verify every given binary by its SHA-256" verify_builds &&
