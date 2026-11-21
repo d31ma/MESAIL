@@ -3160,21 +3160,60 @@ the fast `async` mode"). So a CITADEL crash or power cut can lose the last
 seconds of writes. FYLO finds a damaged file when it reads it and refuses
 it (FYLO's layout spec, section 20.2), so production needs backups and a
 tested restore.
-- **Backups, on a schedule** (Platform owns the scheduler and ATLAS):
-  every FYLO root (btrfs snapshots on CITADEL, or `fylo pack` to `.vdbx`,
-  as ADR 0004 section 4 already does before every deploy), Keycloak's
-  SQLite file, and the files (attachments and raw mail). Keep them apart
-  from the live roots, and write down how many copies are kept and for how
-  long.
-- **Restore runbook** in OPERATIONS.md section 7: `fylo verify --root` to
-  find the damaged documents; restore the named documents from the newest
-  backup; `fylo verify --root` again; then `rebuildCollection` for each
-  collection that had a restored document. Take the exact commands from the
-  FYLO release that Mesail pins.
-- **Done when:** the schedule runs on the production host; OPERATIONS.md
-  section 7 has the runbook; and one restore drill on a copy (never on a
-  live root, never on the dev host's data) restores a damaged document,
-  passes `fylo verify --root`, and is recorded with its time and result.
+- **Backups (Platform, study PLAT-19):** read-only btrfs snapshots of the
+  ATLAS pool on CITADEL, hourly (kept 24 hours) and daily (kept 14 days),
+  and a nightly incremental `btrfs send` to the HAVEN pool. A copy outside
+  the router is a later question for the user. FYLO says an atomic
+  snapshot is enough as it is (layout spec section 20.3, proved by FYLO's
+  slice L1-3): FYLO treats it like a power cut, so no pause and no `fylo
+  pack` before it (pack is for moving a database, not for backups).
+- **One snapshot for all Mesail data:** the FYLO roots, Keycloak's SQLite
+  file (`MESAIL_KEYCLOAK_DATA`, WAL mode, power-cut safe when its `-wal`
+  file is in the same snapshot) and the files (attachments and the raw
+  mail store) must be in the SAME atomic snapshot. While production keeps
+  ADR 0004's layout (ext4 inside the VM's raw disk file on ATLAS), a
+  snapshot of that one raw file covers all of them. If the data ever moves
+  to several files or subvolumes, they need one snapshot that covers all.
+  The slice also checks that Mesail writes and syncs a file before the
+  FYLO record that names it, so a snapshot never has a record without its
+  file (an orphan file without a record is harmless and shows in the
+  attachments orphan report).
+- **Size estimate for Platform** (planning numbers, not measured; the
+  number of people is not decided, so the table scales per person): per
+  person and day, about 120 messages in and out (about 12 with
+  attachments of about 1 MiB each). FYLO roots grow about 6 MB (message
+  records, `inbound-content`, the search index, which FYLO estimates at
+  about 3 to 6 times the text), the attachments about 12 MB, and the raw
+  mail store about 20 MB (it keeps attachments again, base64 encoded).
+  So about 40 MB per person per day, about 1.2 GB per person per month,
+  and about 14 GB per person per year without a retention limit. Keycloak
+  stays under 100 MB. For 50 people: about 2 GB new data a day, 60 GB a
+  month. Mail is mostly appended, so a day's snapshot change is about the
+  new data plus FYLO's rewrites (index pages, about 2 times the FYLO
+  growth): about 2.6 GB a day for 50 people, and about 10 GB of extra
+  space for 14 days of daily snapshots. The blobs (attachments and raw
+  mail) are about 80% of it. Measure the real numbers in the first month
+  of production and update PLAT-19.
+- **Restore runbook** in OPERATIONS.md section 7 (FYLO's steps):
+  1. stop every writer of that root first (never restore under a running
+     owner: `scripts/floci/writers.sh` or the production equivalent);
+  2. restore the root (and Keycloak and the files from the same snapshot)
+     with Platform's restore command;
+  3. open the root normally, so FYLO's recovery runs: unfinished
+     transactions roll back and indexes rebuild;
+  4. run `fylo verify --root <root>`;
+  5. run `rebuildCollection` only for the collections that verify reports;
+  6. start the writers again. The restored lease names an old owner, so the
+     first new owner takes over after 20 s, or at once on the same machine
+     when the old process is gone.
+  Take the exact commands from the FYLO release that Mesail pins.
+- **Restore drill:** restore one daily snapshot to a test image on HANGAR
+  (never over live data, never the dev host's data disk), run the runbook
+  steps 3 to 5, and record the time of each step and the total.
+- **Done when:** the snapshot schedule and the nightly send run on
+  CITADEL; OPERATIONS.md section 7 has the runbook; the drill passed `fylo
+  verify --root` with its measured times written in OPERATIONS.md; and
+  Keycloak signs in a person from the restored copy.
 
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
