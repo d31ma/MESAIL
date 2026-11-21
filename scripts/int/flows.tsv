@@ -1,15 +1,16 @@
 sign-in with a password	^TestAcId9
-sign-in with a 2-step code (TOTP)	
+sign-in with a 2-step code (TOTP)	^TestFlowTotp
 People admin	^TestAcId1[23]
 Domains admin	^TestAcId(3Neither|12Added|4And12)
 messaging: send, edit, delete, reactions, read state	^TestAc(Of8|Ms|Of4)
 mail in through the SMTP edge	^TestAcIn
-mail out through the SMTP edge (delivery)	
+mail out to another hosted domain, bounces and deferral (SMTP edge)	^TestFlowMailOut
+mail out to an outside address through a relay (K34 sink)	
 cross-domain delivery	^TestAcDm6
 attachments	^TestOp7
-notify	
+notify	^TestFlowNotify
 search	^TestAcSr
-devicebox	
-realtime	
+devicebox	^TestFlowDevicebox
+realtime	^TestFlowRealtime
 scheduled job: removals	^Test(K6|D2)
 scheduled jobs: relay, mail-out delivery, notify jobs, daily jobs	
