@@ -3498,6 +3498,31 @@ Coordinator's notes).
   go-live limit (7.6); and a crash test between transactions shows the
   retry or redelivery completes the action with no duplicate.
 
+### K39. messaging's EditEventsTest proves edit coalescing with fewer calls (backlog, test stability, about 1 hour)
+Found by MSL-INT's harness gate (2026-11-21,
+`~/Library/Logs/local/MESAIL/int/harness-gates-0ec570f3.log`): messaging's
+`EditEventsTest` failed once with `TY2110: Handler invocation exceeded its
+deadline` at Mac load 37, with no store failure, and passed alone at load
+24. A release check that needs a quiet Mac is weak.
+- **Cause (read from the code):**
+  `TestManyEditsWhileSearchIsDownLeaveOneWaitingEdit` makes 300 edits of
+  about 4.2 KB in ONE test invocation. Each edit is a message save plus the
+  drain on write (a change row, the change head, and the message save that
+  records the failed push to `search`), so about 4 writes per edit and
+  about 1,200 writes in one invocation. That is a test-design cost, not a
+  production burst: in production each edit is its own request, about 4-5
+  commits (about 1 s on ATLAS), and K38 does not change it (the edit
+  touches three collections).
+- **Builds:** the test proves the same rule (many edits while `search` is
+  down leave ONE waiting `message.edited`, and the message document stays
+  under 512 KiB) with 15 edits of about 39,000 characters (the edit limit
+  is 40,000, MS1516): 15 waiting edits would be about 585 KB, over the
+  cap, so coalescing is still what keeps it under. About 60 writes instead
+  of 1,200. The other two tests stay as they are.
+- **Done when:** the test passes three times in a row inside a heavy
+  `mac-heavy` job while other gates run (load over 30), and it still fails
+  when coalescing is turned off by hand (one check, not committed).
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
