@@ -105,6 +105,7 @@ main() {
   "$(dirname "$0")/up.sh"
   "$(dirname "$0")/deploy.sh" "$@"
   "$(dirname "$0")/blobs.sh"
+  "$(dirname "$0")/relay-sink.sh"
   start_writer_guard
   "$(dirname "$0")/test.sh"
 }

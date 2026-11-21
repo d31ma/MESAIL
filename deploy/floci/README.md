@@ -599,6 +599,42 @@ runs. If the banner does not come (in the dev host: no Lima forward for
 dev host and removes it with `MESAIL_VM=colima`. Production SMTP
 (kestrel, ADR 0007 section 4) is slice OP2.
 
+### Relay sink for outside mail (test stack only, slice K34)
+
+The Floci stack has no real outside mail server, so `mail-out` relays mail
+for outside addresses to a small SMTP sink built from `tests/relaysink`
+(its own `tests/relaysink/Dockerfile`, built by `build.sh` as
+`mesail-relay-sink:<tag>` on the `GOLANG_IMAGE` of the repository
+`Dockerfile`, final image `scratch`, user 10001). It is in the test stack
+only: its own compose file `deploy/floci/compose.relay-sink.yaml`, started
+by `scripts/floci/relay-sink.sh` after `blobs.sh`; no production file names
+it.
+
+- **SMTP:** port 2525 on `mesail_floci_backend`, not published. It keeps
+  every message in memory and answers `550 5.1.1` for one local part
+  (`stack.json` `relaySink.refusedLocalPart`, `refused`), so a refusal can
+  be tested.
+- **mail-out:** `stack.json` `lambdaSettings.mail-out` sets
+  `YON_MAILOUT_RELAYADDRESS=127.0.0.1:12526`,
+  `YON_MAILOUT_RELAYREQUIRETLS=false` (the sink has no TLS) and adds
+  `12526=relay-sink:2525` to `MESAIL_FORWARDS`: the outgoing request guard
+  refuses Docker's private addresses, and `127.0.0.1` is already in
+  `mail-out`'s `outgoing.hosts`, so the local forwarder is the allowed way.
+- **DKIM:** `deploy.sh` writes the public record of each test DKIM key it
+  makes for `mail-out` to `<log dir>/dkim-records/<selector>._domainkey.<domain>`
+  (public keys only). `relay-sink.sh` passes them to the sink as
+  `RELAY_SINK_DKIM_RECORDS`, and the sink checks each signature with
+  `kit/mailauth` like a receiving server would.
+- **Message list:** `GET /messages` on port 8025, published on
+  `127.0.0.1:12580` (`relaySink.listingPort`, `MESAIL_RELAY_SINK_PORT`):
+  JSON, one entry per message with `from`, `recipients`, `dkim`
+  (`domain`, `selector`, `result`) and the raw `data`. `relay-sink.sh`
+  waits up to 60 s for it and writes `<log dir>/relay-sink-address`;
+  `test.sh` passes it as `MESAIL_RELAY_SINK_ADDR`, so
+  `tests/blackbox/FlowMailOutRelay_test.go` runs. Without it (in the dev
+  host: no Lima forward for 12580) the run warns and those tests skip.
+- `down.sh` stops it in the dev host and removes it with `MESAIL_VM=colima`.
+
 ### Scheduler (Floci)
 
 In Lambda form the scheduler is the only caller of the scheduled routes.
@@ -674,6 +710,7 @@ OPERATIONS "Scheduled work" are for `ty start` only.
 | 18180 | Keycloak under `/idp` (for checks only; the tests never call it) |
 | 14566 / 4566 | Floci (AWS API) in the dev host / in Colima |
 | 12525 | SMTP edge (`MESAIL_SMTP_ADDR` of the blackbox tests; the dev host needs a Lima forward for it) |
+| 12580 | Relay sink message list (`MESAIL_RELAY_SINK_ADDR` of the blackbox tests; test stack only; the dev host needs a Lima forward for it) |
 
 ## Not done yet
 

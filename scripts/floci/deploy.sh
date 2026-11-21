@@ -83,11 +83,23 @@ environment_lines() {
   lambda_settings "$service"
 }
 
+dkim_selector() {
+  jq -r '.directory.dkimselector // "mesail"' "$(mesail_root)/apps/directory/server/application.json"
+}
+
 dkim_variable() {
-  local domain="$1" prefix selector
+  local domain="$1" prefix
   prefix="$(jq -r '.mailout.secretprefix' "$(mesail_root)/apps/mail-out/server/application.json")"
-  selector="$(jq -r '.directory.dkimselector // "mesail"' "$(mesail_root)/apps/directory/server/application.json")"
-  echo "${prefix}DKIM_${domain}_${selector}" | tr '[:lower:]' '[:upper:]' | tr -c '[:upper:][:digit:]_\n' '_'
+  echo "${prefix}DKIM_${domain}_$(dkim_selector)" | tr '[:lower:]' '[:upper:]' | tr -c '[:upper:][:digit:]_\n' '_'
+}
+
+dkim_records_dir() {
+  echo "$(mesail_log_dir)/dkim-records"
+}
+
+dkim_public_record() {
+  local file="$1"
+  printf 'v=DKIM1; k=ed25519; p=%s' "$(openssl pkey -in "$file" -pubout -outform DER | tail -c 32 | base64)"
 }
 
 dkim_key() {
@@ -95,6 +107,7 @@ dkim_key() {
   file="$(mktemp "${TMPDIR:-/tmp}/mesail-dkim.XXXXXX")"
   chmod 600 "$file"
   openssl genpkey -algorithm ed25519 -out "$file" 2> /dev/null
+  dkim_public_record "$file" > "$(dkim_records_dir)/$(dkim_selector)._domainkey.$domain"
   jq -n --arg name "$(dkim_variable "$domain")" --rawfile key "$file" '{($name): $key}'
   rm -f "$file"
 }
@@ -102,6 +115,8 @@ dkim_key() {
 dkim_keys() {
   local service="$1" domain
   if [ "$service" != mail-out ]; then return 0; fi
+  rm -rf "$(dkim_records_dir)"
+  mkdir -p "$(dkim_records_dir)"
   for domain in $(mesail_stack '.hostedDomains[]'); do
     dkim_key "$domain"
   done

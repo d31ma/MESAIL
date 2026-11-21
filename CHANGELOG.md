@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The Floci test stack proves mail to outside addresses (slice K34).
+  `mail-out` relays it to a small SMTP sink from `tests/relaysink`, in the
+  test stack only (`deploy/floci/compose.relay-sink.yaml`, its own
+  Dockerfile). The sink keeps each message, checks its DKIM signature
+  against the run's public test keys, refuses one local part with
+  `550 5.1.1`, and lists the messages on `127.0.0.1:12580`.
+  `tests/blackbox/FlowMailOutRelay_test.go` (gated by
+  `MESAIL_RELAY_SINK_ADDR`) proves a delivered, DKIM-signed message reaches
+  status `sent`, and a refusal reaches `bounced`. `kit/smtpclient/sink`
+  gains `Listen(address, options)`.
+
 - No `@Schedule` worker calls anything in the Lambda profile (slice K27, a
   release blocker). K22 showed that `ty start` runs the workers inside the
   Lambda functions: directory's outbox relay and removals called their own

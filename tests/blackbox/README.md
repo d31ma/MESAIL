@@ -119,6 +119,20 @@ The flow tests (`FlowTotp_test.go`, `FlowMailOut_test.go`,
 `MESAIL_TEST_RUN='^TestFlow'` runs them all and
 `MESAIL_TEST_RUN='^TestFlowMailOut'` one flow. They need no new variable.
 
+Mail to an outside address through a relay (`FlowMailOutRelay_test.go`,
+slice K34) needs `MESAIL_RELAY_SINK_ADDR`, the `host:port` of the relay
+sink's message list (`tests/relaysink`; the Floci run sets it to
+`127.0.0.1:12580`), and skips without it.
+`TestFlowMailOutRelayToAnOutsideAddressIsDelivered` waits for status
+`sent`, then finds the message in the sink with a passing DKIM signature
+of `example.com` (selector `mesail`).
+`TestFlowMailOutRelayRefusedByTheRelayIsReportedBack` sends to the local
+part the sink refuses with `550 5.1.1`
+(`MESAIL_RELAY_SINK_REFUSED_LOCAL_PART`, default `refused`) at a fresh
+domain, so no suppression from an earlier run applies, and waits for
+`bounced`. With a sink, `TestFlowMailOutToAnOutsideAddressIsDeferredWithoutARelay`
+skips, because outside mail is then sent.
+
 - TOTP: a new person (made by `ana`) turns on the 2-step code;
   `TotpCode.go` computes RFC 6238 codes from the setup's `secret`. Each
   sign-in waits for a fresh 30-second step (at most 30 seconds), so a

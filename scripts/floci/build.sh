@@ -8,7 +8,16 @@ build_image() {
   shift 2
   BUILDX_GIT_INFO=false docker --context default buildx build --builder default --load --progress plain \
     --platform "linux/$(mesail_stack .architecture)" \
-    --provenance=false --label org.mesail.stack=dev --target "$target" --tag "$tag" "$@" "$(mesail_root)"
+    --provenance=false --label org.mesail.stack=dev ${target:+--target "$target"} --tag "$tag" "$@" "$(mesail_root)"
+}
+
+golang_image() {
+  sed -n 's/^ARG GOLANG_IMAGE=//p' "$(mesail_root)/Dockerfile"
+}
+
+build_relay_sink() {
+  build_image "" "$(mesail_stack .relaySink.image):$MESAIL_IMAGE_TAG" \
+    --file "$(mesail_root)/tests/relaysink/Dockerfile" --build-arg "GOLANG_IMAGE=$(golang_image)"
 }
 
 trace_argument() {
@@ -52,6 +61,7 @@ main() {
   mesail_step build-router build_image router "mesail-router:$MESAIL_IMAGE_TAG"
   mesail_step build-scheduler build_image scheduler "mesail-scheduler:$MESAIL_IMAGE_TAG"
   mesail_step build-keycloak build_image mesail-keycloak "$(mesail_stack .keycloak.image):$MESAIL_IMAGE_TAG"
+  mesail_step build-relay-sink build_relay_sink || echo "warning: the relay sink did not build; FlowMailOutRelay_test.go skips"
   for service in $(chosen_services "$@"); do
     mesail_step "build-$service" build_service "$service" || echo "warning: $service did not build; it is not deployed"
   done

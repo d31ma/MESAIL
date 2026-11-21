@@ -1,0 +1,14 @@
+# Test stack only (slice K34): the SMTP sink that mail-out relays outside
+# mail to. Never part of a production deploy. Started by
+# scripts/floci/relay-sink.sh after the functions are deployed.
+services:
+  relay-sink:
+    image: mesail-relay-sink:${MESAIL_IMAGE_TAG:-dev}
+    environment:
+      RELAY_SINK_SMTP_LISTEN: 0.0.0.0:2525
+      RELAY_SINK_LISTING_LISTEN: 0.0.0.0:8025
+      RELAY_SINK_REFUSED_LOCAL_PART: ${MESAIL_RELAY_SINK_REFUSED_LOCAL_PART:-refused}
+      RELAY_SINK_DKIM_RECORDS: ${MESAIL_RELAY_SINK_DKIM_RECORDS:-}
+    ports:
+      - "127.0.0.1:${MESAIL_RELAY_SINK_PORT:-12580}:8025"
+    networks: [backend]

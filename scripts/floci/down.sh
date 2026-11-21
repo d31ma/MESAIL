@@ -15,9 +15,14 @@ blobs_volume() {
   cat "$(mesail_log_dir)/blobs-volume" 2> /dev/null || true
 }
 
-used_profile() {
+blobs_profile() {
   if [ -z "$(blobs_volume)" ]; then base_profile; return; fi
   echo "$(base_profile) --file $(mesail_root)/deploy/floci/compose.blobs.yaml"
+}
+
+used_profile() {
+  if [ ! -f "$(mesail_log_dir)/relay-sink-started" ]; then blobs_profile; return; fi
+  echo "$(blobs_profile) --file $(mesail_root)/deploy/floci/compose.relay-sink.yaml"
 }
 
 function_containers() {

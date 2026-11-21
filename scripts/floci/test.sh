@@ -28,8 +28,13 @@ smtp_address() {
   cat "$(mesail_log_dir)/smtp-address" 2> /dev/null || true
 }
 
+relay_sink_address() {
+  cat "$(mesail_log_dir)/relay-sink-address" 2> /dev/null || true
+}
+
 go_blackbox() {
   (cd "$(mesail_root)/tests/blackbox" && MESAIL_BASE_URL="$MESAIL_ROUTER_URL" MESAIL_SMTP_ADDR="$(smtp_address)" \
+    MESAIL_RELAY_SINK_ADDR="$(relay_sink_address)" MESAIL_RELAY_SINK_REFUSED_LOCAL_PART="$(mesail_stack .relaySink.refusedLocalPart)" \
     go test -tags blackbox -count=1 -v -run "$1" ./...)
 }
 

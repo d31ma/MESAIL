@@ -277,7 +277,10 @@
       "YON_ATTACHMENTS_LINK_BASE": "http://127.0.0.1:18080/blobs"
     },
     "mail-out": {
-      "YON_MAILOUT_BLOBFOLDER": "/mnt/data/blobs"
+      "YON_MAILOUT_BLOBFOLDER": "/mnt/data/blobs",
+      "YON_MAILOUT_RELAYADDRESS": "127.0.0.1:12526",
+      "YON_MAILOUT_RELAYREQUIRETLS": "false",
+      "MESAIL_FORWARDS": "18180=keycloak:8080,18080=router:8080,12526=relay-sink:2525"
     },
     "mail-in": {
       "YON_MAILIN_BLOBS_ADAPTER": "local",
@@ -288,6 +291,11 @@
   "smtp": {
     "port": 12525,
     "mailHostname": "mx.example.com"
+  },
+  "relaySink": {
+    "image": "mesail-relay-sink",
+    "listingPort": 12580,
+    "refusedLocalPart": "refused"
   },
   "storeUnavailable": {
     "directory": [
