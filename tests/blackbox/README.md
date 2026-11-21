@@ -112,4 +112,29 @@ Fixture tokens live 60 seconds. A test that waits longer than about 45
 seconds (a removal, a membership change) takes its token from
 `RenewingToken`, which signs in again when the token is 45 seconds old.
 
+The flow tests (`FlowTotp_test.go`, `FlowMailOut_test.go`,
+`FlowNotify_test.go`, `FlowDevicebox_test.go`, `FlowRealtime_test.go`;
+slice K33) prove whole flows end to end for the integration run
+(MSL-INT). Every name starts with `TestFlow<Area>`, so
+`MESAIL_TEST_RUN='^TestFlow'` runs them all and
+`MESAIL_TEST_RUN='^TestFlowMailOut'` one flow. They need no new variable.
+
+- TOTP: a new person (made by `ana`) turns on the 2-step code;
+  `TotpCode.go` computes RFC 6238 codes from the setup's `secret`. Each
+  sign-in waits for a fresh 30-second step (at most 30 seconds), so a
+  code is never reused by accident.
+- Mail out: an email to `eve@example.org` must reach status `sent` on
+  Ana's message and arrive; an unknown mailbox in `example.org` must be
+  reported `bounced`; an email to an outside address must leave `queued`
+  (`deferred` on Floci, where mail-out has no relay). They wait up to 150
+  seconds (the delivery job runs on the scheduler).
+- Notify uses `ana` and `bo`; the mute test makes a new person, so the
+  fixtures' settings never change. Waits are 30 seconds.
+- Devicebox makes two new people per test, each with one first device
+  (no signature needed), and deletes the devices at the end.
+- Realtime opens the socket at `<MESAIL_BASE_URL>/api/v1/realtime/socket`
+  with `SocketClient.go`, a small standard-library WebSocket client, and
+  answers `reauth`. It waits up to 75 seconds for a pushed frame (the
+  Floci relay tick is 60 seconds when drain on write fails).
+
 A missing variable skips the test.
