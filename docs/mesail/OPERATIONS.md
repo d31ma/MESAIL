@@ -82,10 +82,15 @@ on. So a sweep never holds an app's single FYLO writer for long. Events
 still go out right after each write (the relay's drain); the sweep only
 retries what the drain missed.
 
-**On Floci** no `@Schedule` worker runs. The `scheduler` container calls
-every route in `deploy/floci/stack.json` `schedules` once a minute
-(`scheduleSeconds`), one route at a time, and `scheduler-daily` calls the
-`"daily": true` routes once a day. A one-minute schedule (EventBridge
+**On Floci** no `@Schedule` worker makes a call: `ty start` still starts
+them, but the Lambda profile sets `"workers": {"enabled": false}` and each
+worker returns at once (slice K27; realtime, a container, keeps its
+worker). The `scheduler` container calls every route in
+`deploy/floci/stack.json` `schedules` once a minute (`scheduleSeconds`),
+one route at a time, `scheduler-fast` calls the `"fast": true` routes
+(mail-out's and notify's jobs and relays) every 30 s
+(`fastScheduleSeconds`), and `scheduler-daily` calls the `"daily": true`
+routes once a day. A one-minute schedule (EventBridge
 `rate(1 minute)` too) has no seconds offset, so there the time budget is
 the protection, not the start times: the router runs one call at a time
 per FYLO app and lets a waiting user request go before a background call,
@@ -350,12 +355,13 @@ the FYLO test image are on HANGAR).
 ### 7.3 Stop every writer first
 Never restore under a running owner. What starts a writer: user requests
 and other apps' outbox pushes (both through the router), the schedulers
-(the scheduler containers and the in-function `@Schedule` workers inside
-each Lambda container until SLICES K27 removes them), and the SMTP edge.
+(the scheduler containers; since SLICES K27 the in-function `@Schedule`
+workers in the Lambda containers make no calls), and the SMTP edge.
 Stopping only a function's containers is not enough: the next request
 starts a new one.
 1. `docker compose stop router smtp realtime` and every scheduler service
-   (today `scheduler` and `scheduler-daily`; use the names on `develop`).
+   (today `scheduler`, `scheduler-daily` and `scheduler-fast`; use the
+   names on `develop`).
    Never `rm`.
 2. `docker stop` every `floci-aws-mesail-*` container.
 3. Check: `docker ps --filter name=floci-aws-mesail-` is empty, and no
