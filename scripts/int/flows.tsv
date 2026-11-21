@@ -12,5 +12,5 @@ notify	^TestFlowNotify
 search	^TestAcSr
 devicebox	^TestFlowDevicebox
 realtime	^TestFlowRealtime
-scheduled job: removals	^Test(K6|D2)
-scheduled jobs: relay, mail-out delivery, notify jobs, daily jobs	
+scheduled job: directory removals	^TestD2
+scheduled jobs: outbox relay, mail-out delivery, notify fan-out, daily cleanup	^TestFlowJobs

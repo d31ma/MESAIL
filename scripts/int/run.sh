@@ -430,7 +430,7 @@ failure_section() {
 }
 
 flows_file() {
-  echo "$(cd "$(dirname "$0")" && pwd)/flows.tsv"
+  echo "${MESAIL_INT_FLOWS:-$(cd "$(dirname "$0")" && pwd)/flows.tsv}"
 }
 
 blackbox_log() {

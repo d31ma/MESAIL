@@ -54,7 +54,8 @@ int_test_arguments() {
 int_test_checksum_mismatch() {
   local work="$1" status summary wrong
   wrong="$(printf '0%.0s' $(seq 64))"
-  MESAIL_INT_LOGS="$work/mismatch" MESAIL_INT_WORK="$work/trees" "$(int_test_script)" \
+  printf 'search\t^TestAcSr\nsome future flow\t\n' > "$work/flows.tsv"
+  MESAIL_INT_FLOWS="$work/flows.tsv" MESAIL_INT_LOGS="$work/mismatch" MESAIL_INT_WORK="$work/trees" "$(int_test_script)" \
     --ty-linux "$work/ty" --ty-linux-sha256 "$wrong" --tachyon-commit abc123 --steps floci > "$work/mismatch.out" 2>&1
   status=$?
   summary="$(int_test_only_summary "$work/mismatch")"
@@ -63,7 +64,7 @@ int_test_checksum_mismatch() {
   int_test_expect_contains "the builds step failed" "| builds | FAIL rc=1 |" "$summary"
   int_test_expect_contains "the failure names the mismatch" "checksum mismatch for $work/ty" "$summary"
   int_test_expect_contains "the summary names the TACHYON commit" "- TACHYON: commit abc123" "$summary"
-  int_test_expect_contains "an uncovered flow is listed as not covered" "| scheduled jobs: relay, mail-out delivery, notify jobs, daily jobs | not covered (no blackbox test yet) |" "$summary"
+  int_test_expect_contains "an uncovered flow is listed as not covered" "| some future flow | not covered (no blackbox test yet) |" "$summary"
   int_test_expect_contains "a covered flow that did not run is not a pass" "| search | not run |" "$summary"
   int_test_expect_missing "no worktree is made" "$work/trees"
   int_test_expect_missing "no tool copy is left" "$(dirname "$summary")/tools"
