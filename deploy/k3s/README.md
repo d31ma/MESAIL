@@ -15,7 +15,7 @@ The decision and every difference from kestrel are in
 | `node/k3s.service` | the pilot's unit, with a mount check for each disk; installed but never enabled at boot |
 | `node/service-cidr-guard.*` | the pilot's nftables guard for `10.43.0.0/16`, plus an input rule that rejects the K3s ports (API 6443, kubelet, kube-proxy, NodePorts, flannel) arriving on the VM's network interface `eth0` |
 | `registry/` | Zot as the pilot's `registry.json`, keeping the last 2 digests per image; `pusher` (Mesail) may push anywhere except `paas-develop/**`, and `paas-pusher` (PaaS `develop`) only to `paas-develop/**` |
-| `node-check/` | the FYLO probe: a pod mounts `apps/nodecheck.vol` by subPath at `/mnt/data` and writes and reads the root `/mnt/data/nodecheck` |
+| `node-check/` | the FYLO probe: a pod mounts its own static local PV (`apps/nodecheck.vol`) at `/mnt/data` and writes and reads the root `/mnt/data/nodecheck`, the same layout as the apps |
 
 ## Disks in the dev host
 
@@ -52,7 +52,7 @@ mounts; the node stays cordoned until it is Ready, then `sudo k3s kubectl uncord
 `install-node.sh` copies only the `k3s` binary, so they are not installed.
 
 Workloads on this node: FYLO owners set `terminationGracePeriodSeconds: 40` (never over 120); no PodDisruptionBudget
-that can block a drain; no DaemonSets; volumes only on the data disk (local-path PVCs or static local PVs), never a
+that can block a drain; no DaemonSets; volumes only on the data disk, static local PVs only (one per `<name>.vol` folder that `node-folders.sh` makes), never a
 `hostPath`.
 
 ## What the dev host session sets up first

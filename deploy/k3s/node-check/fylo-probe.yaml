@@ -9,7 +9,7 @@ metadata:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: node-check-apps
+  name: node-check-nodecheck-vol
 spec:
   capacity:
     storage: 1Gi
@@ -18,10 +18,10 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
   local:
-    path: /mnt/mesail-data/apps
+    path: /mnt/mesail-data/apps/nodecheck.vol
   claimRef:
     namespace: node-check
-    name: apps
+    name: nodecheck
   nodeAffinity:
     required:
       nodeSelectorTerms:
@@ -34,13 +34,13 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: apps
+  name: nodecheck
   namespace: node-check
 spec:
   accessModes:
     - ReadWriteOnce
   storageClassName: ""
-  volumeName: node-check-apps
+  volumeName: node-check-nodecheck-vol
   resources:
     requests:
       storage: 1Gi
@@ -106,18 +106,17 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - name: apps
+            - name: nodecheck
               mountPath: /mnt/data
-              subPath: nodecheck.vol
             - name: probe
               mountPath: /opt/probe
               readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
-        - name: apps
+        - name: nodecheck
           persistentVolumeClaim:
-            claimName: apps
+            claimName: nodecheck
         - name: probe
           configMap:
             name: fylo-probe

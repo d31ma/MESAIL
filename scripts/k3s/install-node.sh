@@ -201,9 +201,14 @@ install_flux() {
   guest sudo k3s kubectl -n flux-system wait --for=condition=Available deployment/source-controller deployment/kustomize-controller --timeout=300s
 }
 
+make_app_folders() {
+  guest sudo bash -s < "$(install_root)/scripts/k3s/node-folders.sh"
+}
+
 run_all() {
   step mounts require_mounts
   step folders prepare_folders
+  step app-folders make_app_folders
   step units install_units
   step k3s-binary install_k3s_binary
   step airgap-images install_airgap_images

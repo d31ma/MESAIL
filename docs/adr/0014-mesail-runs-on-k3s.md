@@ -110,9 +110,8 @@ Keycloak. No Lambda remains.
   - no PodDisruptionBudget that can block an eviction (with one copy per
     app, any `minAvailable: 1` PDB would stop the drain);
   - no DaemonSets;
-  - volumes only on the data disk: local-path PVCs, or the static local
-    PVs that section 5 names (the FYLO areas and the blob folder); never a
-    `hostPath`, and nothing into the OS disk.
+  - volumes only on the data disk, and only static local PVs (section 5);
+    never local-path, never a `hostPath`, and nothing into the OS disk.
 - **Plain Deployments, not Knative.** Knative starts a new pod before the
   old one stops, and scale to zero reopens FYLO cold. Knative may come
   later for `identity` alone (no FYLO root), by a new decision.
@@ -202,11 +201,26 @@ section 5.1; `ENOTVOLUMEROOT`), and refuses a root on the node's boot
 disk (`ESYSTEMDISK`). So:
 
 - The data area holds one folder per app: `<area>/<app>.vol/<app>`.
-- Each FYLO-owning pod mounts only `<area>/<app>.vol`, through a volume
-  with `subPath: <app>.vol`, at `/mnt/data`. The bind mount makes
-  `/mnt/data` a mount point, and the app's root is `/mnt/data/<app>`.
-  Each pod sees only its own app.
-- Never a `hostPath` on the node's boot disk.
+- **The node layer makes the folders**, before Flux applies anything:
+  `scripts/k3s/node-folders.sh`, run as root through `mesail-devhost
+  exec`, makes `/mnt/mesail-data/apps/<name>.vol` for every app that owns a
+  FYLO root (directory, channels, messaging, attachments, notify, search,
+  mail-in, mail-out, devicebox), plus `keycloak.vol` and `blobs.vol`, owned
+  by uid and gid 10001 with mode 0700. It refuses a folder that exists with
+  another owner and never deletes one, so it is safe to run again. Every
+  Mesail image, Keycloak included, runs as uid 10001 (K42).
+- **Static local PVs only:** one `local` PersistentVolume per folder
+  (storage class `mesail-local` with no provisioner, `reclaimPolicy:
+  Retain`, node affinity to the one node), and one PVC bound to it by
+  `volumeName`. Retain keeps the data when a PVC is deleted. Not
+  local-path: its default deletes the data with the PVC, and the kubelet
+  would create a missing `subPath` folder as root, which a non-root pod
+  under pod-security `restricted` cannot write into.
+- Each FYLO-owning pod mounts only its own PV (its `<app>.vol` folder) at
+  `/mnt/data`. The local volume's bind mount makes `/mnt/data` a mount
+  point, and the app's root is `/mnt/data/<app>`. Each pod sees only its
+  own app.
+- Never a `hostPath`, on the node's boot disk or anywhere else.
 - On this Mac the area is the dev host's ext4 data disk on HANGAR. On
   kestrel it is the Mesail-only area on ATLAS: `/Volumes/MESAIL/<app>`
   (ADR 0004 section 4) becomes `/Volumes/MESAIL/<app>.vol/<app>` (K46),
@@ -221,7 +235,7 @@ disk (`ESYSTEMDISK`). So:
   never downloads (ADR 0007 sections 1 to 3, 5 and 8). The Floci rows in
   ADR 0007 section 5 now read: Lambda per service is a Deployment per
   service; the router serves the web bundles from its own image or a
-  volume, not from Floci's S3; EFS is a subPath mount on the data area.
+  volume, not from Floci's S3; EFS is a static local PV per app on the data disk.
 - One writer per FYLO root, the FYLO layout, bounded work per call, the
   outbox and the scheduler (ADR 0004 section 4, EVENTS.md).
 - Native `ty start` runs (`scripts/native/run-all.sh`) stay the way every
