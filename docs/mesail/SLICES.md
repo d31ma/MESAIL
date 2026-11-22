@@ -3481,7 +3481,14 @@ Coordinator's notes).
   send needs Mesail's "fewer collections per send" slice (for example the
   sender's read position inside the conversation document) and (b) whether
   transactions across collections come back as a question. Until that
-  table, no collection redesign.
+  table, no collection redesign. PERF1's first number (2026-11-21, on
+  ANVIL's network disk, the sidecar store): a batch of 25 writes went from
+  about 1,700 ms to 243 ms. Whether that batch is 25 single commits or one
+  transaction is asked of FYLO: if single commits, a plain send is about
+  0.1 s and K38 becomes an optimisation; if one transaction, K38 keeps its
+  value. The ATLAS number (OPERATIONS.md 7.6) still decides. K37's cap (25
+  writes or 20 s per call) does not change either way: it guards the 60 s
+  function timeout and long SMTP hand-offs, not speed.
 - **Across collections:** the user decided "Decide after measuring
   (Rec.)" (2026-11-21, after "One-collection only" earlier): transactions
   stay one-collection; FYLO's SDK-3 and FYLO-PERF1 measure first, then the
@@ -3625,6 +3632,12 @@ Release blockers:
   (OPERATIONS.md section 7.4) is accepted through the hub.
 - **K37:** mail-out's deliver job and notify's fan-out stay within 25
   writes per call.
+- **FYLO with the crash fix:** a known FYLO bug (also in the released
+  26.45.07): after a crash only, a document deleted after an earlier save
+  can come back (with a copy in `.deleted`). Normal running is fine. The
+  fix goes into FYLO develop and DB-3. Mesail production uses a FYLO with
+  this fix (DB-3 or later); no Mesail code change. The restore drill
+  (K31) runs on that FYLO.
 - **Write speed on ATLAS:** OPERATIONS.md section 7.6's measurement; K38
   (one FYLO transaction per collection per action) becomes a blocker if
   reads wait too long; a slow plain send needs FYLO's cost per commit.
