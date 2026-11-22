@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Checks the Mesail K3s node in the dev host (ADR 0014, slice MSL-K41).
 # Usage: scripts/k3s/node-check.sh [--probe-image <docker image>]
-set -euo pipefail
+set -Eeuo pipefail
+trap 'echo "=== step failed rc=$? at line $LINENO $(date +%H:%M:%S)"' ERR
 
 node_check_root() {
   cd "$(dirname "$0")/../.." && pwd
@@ -100,14 +101,21 @@ public_services() {
   kubectl_guest get services --all-namespaces -o 'jsonpath={range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}/{.metadata.name} LoadBalancer{"\n"}{end}{range .items[?(@.spec.externalIPs)]}{.metadata.namespace}/{.metadata.name} externalIPs{"\n"}{end}'
 }
 
+loopback_only() {
+  local listeners
+  listeners=$(lsof -nP -iTCP:"$1" -sTCP:LISTEN | awk 'NR>1 {print $9}' | sort -u)
+  echo "Mac listeners on port $1: ${listeners:-none}"
+  [ "$listeners" = "127.0.0.1:$1" ]
+}
+
 check_localhost_only() {
-  local services listeners
+  local services
   services=$(public_services)
-  listeners=$(lsof -nP -iTCP:"$(pin registry.host_port)" -sTCP:LISTEN | awk 'NR>1 {print $9}' | sort -u)
   echo "LoadBalancer or external-IP Services: ${services:-none}"
-  echo "Mac listeners on port $(pin registry.host_port): ${listeners:-none}"
-  guest sudo nft list chain inet mesail_service_cidr_guard input > /dev/null
-  [ -z "$services" ] && [ "$listeners" = "127.0.0.1:$(pin registry.host_port)" ]
+  guest sudo nft list chain inet mesail_service_cidr_guard input > /dev/null \
+    && loopback_only "$(pin registry.host_port)" \
+    && loopback_only "$(pin api.host_port)" \
+    && [ -z "$services" ]
 }
 
 check_flux() {
@@ -135,12 +143,11 @@ report_numbers() {
 }
 
 run_step() {
-  local name="$1" rc=0
+  local name="$1"
   shift
   step_start "$name"
-  "$@" || rc=$?
-  step_end "$name" "$rc"
-  return "$rc"
+  "$@"
+  step_end "$name" 0
 }
 
 parse_probe_image() {

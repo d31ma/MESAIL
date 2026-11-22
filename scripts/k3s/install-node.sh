@@ -4,10 +4,12 @@
 # supervisor starts it after the image disk is mounted and
 # /var/lib/rancher/k3s is bound onto it. Needs: the user's download yes, Platform's OK, the dev host
 # at 8 GiB with the image disk mounted at /mnt/mesail-k3s and the Lima
-# forward of guest 127.0.0.1:30500 -> 127.0.0.1:15000, and the files staged by
+# forward of guest 127.0.0.1:30500 -> 127.0.0.1:25000 (and the API, guest
+# 127.0.0.1:6443 -> 127.0.0.1:26443), and the files staged by
 # stage-node-files.sh. It never touches Floci's containers or volumes.
 # Usage: scripts/k3s/install-node.sh
-set -euo pipefail
+set -Eeuo pipefail
+trap 'echo "=== step failed rc=$? at line $LINENO $(date +%H:%M:%S)"' ERR
 
 install_root() {
   cd "$(dirname "$0")/../.." && pwd
@@ -28,12 +30,11 @@ print(d)' "$(install_root)/deploy/k3s/node/pins.json" "$1"
 }
 
 step() {
-  local name="$1" rc=0
+  local name="$1"
   shift
   echo "=== $name $(date +%H:%M:%S)"
-  "$@" || rc=$?
-  echo "=== $name rc=$rc $(date +%H:%M:%S)"
-  return "$rc"
+  "$@"
+  echo "=== $name rc=0 $(date +%H:%M:%S)"
 }
 
 put_file() {
@@ -123,7 +124,9 @@ write_auth_file() {
 }
 
 install_registry() {
-  pusher_secret_exists || create_pusher
+  if ! pusher_secret_exists; then
+    create_pusher
+  fi
   write_auth_file
   guest sudo k3s kubectl apply -f - < "$(install_root)/deploy/k3s/registry/zot.yaml"
   guest sudo k3s kubectl -n registry rollout status deployment/zot --timeout=300s
