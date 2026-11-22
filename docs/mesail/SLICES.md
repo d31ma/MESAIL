@@ -3437,108 +3437,64 @@ ATLAS a FYLO commit takes about 228 ms (p95 377 ms, FYLO-L1-3), so rule 9
   cap with `more: true` and the next call continues; a 22-reader message
   stays within 25 writes in one call; the K33 flow tests still pass.
 
-### K38. One FYLO transaction per collection per action (backlog; release blocker if the go-live check says so)
-Every Mesail write is one FYLO commit today (Mesail's data source has
-only single-document calls). On ATLAS a commit takes about 228 ms (p95
-377 ms, FYLO-L1-3). The rate fits at about 10 people; the cost is latency
-(write-rate study, `fylo-write-rates-atlas.md` in the MESAIL Build
-Coordinator's notes).
-- **What TACHYON gives** (TAC-FY2, after FYLO DB-2 is published): a
-  one-collection "AllOrNothing" call from Go handlers: several puts,
-  saves and deletes to ONE collection as one FYLO Store transaction, all
-  or nothing. Transactions across collections are not planned (FYLO
-  api/store/v1, ADR 0035).
-- **How** (TAC-FY2's call shape, `k38-tachyon-transactions.md` in the
-  MESAIL Build Coordinator's notes; check it against the TACHYON release):
-  - `DataSource.Command` with `{"operation":"transaction","action":"begin"}`,
-    then document `insert`, `patch` or `deleteById` commands with
-    `"transaction":<id>`, then `commit`; a deferred `rollback` on every
-    path. The typed `Insert`/`Patch` helpers take no transaction, and
-    `@AllOrNothing` does not join them, so Mesail's data source gets one
-    small transaction helper (one place, not copied per app);
-  - the first write fixes the collection; a write to another collection
-    rolls everything back. At most 1,000 writes and 8 MiB;
-  - no `createCollection` or `dropCollection` inside: a new monthly
-    collection is created (and registered) before `begin`. Mesail's
-    outbox is staged fields plus HTTP pushes, not FYLO queue operations,
-    so it fits inside; nothing queue-based is used;
-  - the transaction must commit within one handler answer (the store
-    budget, 5 s by default, at most 10 s). Each FYLO function runs one call
-    at a time, so the limit of 4 open transactions per server is never
-    reached;
-  - Go sees any failure only as `YonResourceError` with no code. So any
-    error means "nothing in this transaction was written": the action
-    stops and answers as today (a retryable `503` for a request; the
-    event is redelivered for a consumer), and the earlier transactions
-    of the action are completed by that retry (the ordering rule below);
-  - reads inside use `"transaction":<id>` to see their own writes.
-- **Blocked until** TAC-FY2 is in a TACHYON release Mesail pins, and FYLO's
-  measured table is in. FYLO's design target (2026-11-21): a transaction
-  of N writes costs about ONE commit plus a small cost per document, not N
-  commits. FYLO's SDK-3 measures a single put against transactions of 1,
-  5, 25 and 100 writes on ANVIL's NFS mount; plan K38 from that table, not
-  from the target. If a transaction costs about N commits, K38 brings
-  little and stays backlog.
-- **Cost per commit:** FYLO plans to cut it in its next release.
-  FYLO-PERF1 measures where an ATLAS commit's 228 ms go (each fsync,
-  rename, folder sync, lease, index and log write) and cuts the network
-  round trips per commit; its target, not a promise, is a plain commit at
-  about 100 ms p50 or less. PERF1's before/after table (p50 and p95, a
-  single put and a 25-write transaction) decides (a) whether a slow plain
-  send needs Mesail's "fewer collections per send" slice (for example the
-  sender's read position inside the conversation document) and (b) whether
-  transactions across collections come back as a question. Until that
-  table, no collection redesign. PERF1's first number (2026-11-21, on
-  ANVIL's network disk, the sidecar store): a batch of 25 writes went from
-  about 1,700 ms to 243 ms. FYLO's answer: that is ONE batch (one storage
-  commit); a single save there is now about 30 ms, so 25 separate saves
-  are about 750 ms (`~/Library/Logs/local/FYLO/measurements/txn-cost-20261121.md`).
-  So on ANVIL a plain send is about 0.2 s, and a 26-write burst about
-  0.8 s, or about 0.3-0.4 s with K38: K38 still saves about two-thirds on
-  the bursts. The ATLAS number (OPERATIONS.md 7.6) still decides. K37's cap (25
-  writes or 20 s per call) does not change either way: it guards the 60 s
-  function timeout and long SMTP hand-offs, not speed.
-- **Across collections:** the user decided "Decide after measuring
-  (Rec.)" (2026-11-21, after "One-collection only" earlier): transactions
-  stay one-collection; FYLO's SDK-3 and FYLO-PERF1 measure first, then the
-  user chooses with real numbers (FYLO's question Q-TXN2: one transaction
-  across several collections of one namespace, which would make a send
-  one commit). K38 is designed per collection.
-- **Rule for every action:** group the writes per collection into one
-  transaction. Write the derived and helper documents first, and the
-  document that carries the staged outbox events (or, for an event
-  consumer, the `events-seen` row) LAST, as the commit point. Everything
-  before it is idempotent (fixed ids from the message, event or envelope
-  id), so a crash between transactions leaves only rows that the client's
-  retry (same idempotency key) or the event's redelivery completes, and
-  the outbox drain never sends an event for an action that did not
-  finish.
-- **Per action** (collections from the code on develop 9f5f6bb4; today's
-  commits -> commits with K38):
-  | Action (root) | Collections, in order | Commits |
+### K38. One FYLO transaction per user action (backlog; waits for FYLO's next release and TACHYON's call)
+The user decided Q-TXN2 (2026-11-21, quoted through the hub): "Yes,
+several (Rec.)". FYLO's coming release allows ONE all-or-nothing
+transaction across several collections of the same namespace. So each user
+action becomes one commit in its app's root, and Mesail drops the repair
+work it needed for half-saved actions (below). Earlier per-collection
+plans (TAC-FY2's one-collection call, `k38-tachyon-transactions.md` in the
+MESAIL Build Coordinator's notes) are replaced.
+- **Blocked until** FYLO's release with cross-collection transactions and
+  TACHYON's data source call for them are in the releases Mesail pins.
+  The exact call shape and limits (most writes and bytes, most
+  collections, time limit, errors) come from the FYLO and TACHYON Build
+  Coordinators; use those, never a guess. Today's one-collection limits
+  (1,000 writes, 8 MiB, commit within one handler answer, no collection
+  create or drop inside, any error means nothing was written) are the
+  working assumption until then.
+- **What stays outside a transaction:** writes in ANOTHER app's root (a
+  different FYLO root) still go through the outbox and events, so the
+  outbox, `events-seen` and idempotency keys stay. Plain blob files
+  (attachments, raw mail) are written and synced before the transaction
+  that names them. Keycloak calls (directory) stay ordered before the
+  FYLO transaction. A new monthly collection is created before `begin`.
+- **Per action** (counts from the code on develop 9f5f6bb4; today's
+  commits -> with K38):
+  | Action (root) | One transaction holds | Commits |
   | --- | --- | --- |
-  | Chat send, plain (messaging) | conversations, participants (sender read position), then messages (insert and outbox save as one); drain: changes, change heads, messages | 7 -> 6 |
-  | Send with A attachments, M mentions, a thread reply (messaging) | attachment-uses (A), mentions (M), thread keys, conversations, participants, then messages (with the thread root save); drain as above | up to 25 -> about 9 |
-  | Channel message to 22 readers (notify) | notifications (20), notify-threads, notify-fanout, then events-seen | about 26 -> 4 |
-  | Mark read (notify) | notifications (up to 20 patches), then events-seen | up to 21 -> 2 |
-  | Inbound email (mail-in) | inbound-content, then inbound-raw (with outbox) | 4 -> 2 |
-  | Inbound email (messaging) | participants (P new), conversations, email-threads, then messages; then events-seen | 9-29 -> about 5-6 |
-  | Devicebox put | bodies, box counts (up to 8 as one), then slips (with outbox) | up to 11 -> 3 |
-  | Devicebox acknowledge, E envelopes | slips (E patches or deletes), bodies (deletes), then box counts | up to 21 -> 3 |
-  | mail-out deliver, per item | delivery-attempts, then the outbound item's claim and outcome as one | 4 -> 2 |
-  The box counts that can drift without a transaction (DOMAIN.md) still
-  span two collections, so the drift note stays; the counts move as one.
-- **Go-live value:** K38 removes the 20-26 write bursts (notify fan-out,
-  mark-read, devicebox acknowledgements, big sends), so reads no longer
-  wait 5-10 s behind them. It barely helps a plain send (7 -> 6 commits,
-  because that send touches six collections). If OPERATIONS.md section 7.6
-  finds a plain send's p95 over 3 s, the fix is FYLO's cost per commit
-  (fewer files per commit) or fewer collections per send (for example the
-  sender's read position inside the conversation document), not K38.
-- **Done when:** the write-cost tests show the commits in the table; on
-  the ATLAS production host a read's p95 while events apply is under the
-  go-live limit (7.6); and a crash test between transactions shows the
-  retry or redelivery completes the action with no duplicate.
+  | Chat send, plain or with attachments and mentions (messaging) | conversation, participants, message with its outbox entry, attachment-uses, mentions, thread key, and the change rows and head (moved from the drain into the send) | 7 (up to 25) -> 2: the send, then the relay's save after the push |
+  | Channel message to 22 readers (notify) | notifications, thread record, fan-out record, events-seen | about 26 -> 1 |
+  | Mark read (notify) | the notification patches and events-seen | up to 21 -> 1 |
+  | Email in (mail-in) | inbound-raw with its outbox entry, inbound-content | 4 -> 1, plus the relay's save |
+  | Email in (messaging) | participants, conversation, email thread, message, change rows, events-seen | 9-29 -> 1 |
+  | Devicebox put / acknowledge | body, slip with its outbox entry, box counts / slips, bodies, box counts | up to 11 / 21 -> 1 each |
+  | mail-out deliver, per item | the claim (before the SMTP call); then the attempt and the outcome | 4 -> 2 |
+  | Directory: add or remove a member | after the Keycloak step: people, members (with its outbox entry), addresses | 3 -> 1 |
+  On ANVIL after FYLO-PERF1 a single commit is about 30 ms and a 25-write
+  batch about 243 ms (`~/Library/Logs/local/FYLO/measurements/txn-cost-20261121.md`),
+  so a plain send is about 0.06 s and every burst about one commit. The
+  ATLAS number comes from OPERATIONS.md section 7.6, with the user's yes.
+- **Repair work dropped** (it existed only because FYLO had no
+  cross-collection transaction):
+  - the ordering rule of the per-collection plan (helpers first, the
+    outbox document last as the commit point, a retry completing half-saved
+    actions);
+  - DOMAIN.md "One collection per write" and the directory's "Order of
+    writes" for its FYLO steps (the Keycloak step keeps its order);
+  - DOMAIN.md "Box counts can drift": the counts commit with the slips, so
+    no repair job is ever needed for them;
+  - CONTRACTS.md's devicebox note that the box count "may drift after a
+    crash".
+  Each is rewritten in the same commit that brings K38's code, not before.
+- **Open slices:** K37 does not change (its 25-writes-or-20-s cap guards
+  the 60 s function limit and long SMTP hand-offs). D2's removal jobs keep
+  their batches of at most 25 writes, each batch one transaction. K31's
+  runbook does not change. K30 and K40 do not change.
+- **Done when:** the write-cost tests show the commits in the table; a
+  crash test in the middle of each action leaves either all of it or none
+  of it (no half-saved state, no drifted count); the K33 flow tests pass;
+  and OPERATIONS.md 7.6's measurement passes.
 
 ### K39. messaging's EditEventsTest proves edit coalescing with fewer calls (backlog, test stability, about 1 hour)
 Found by MSL-INT's harness gate (2026-11-21,
@@ -3553,8 +3509,8 @@ deadline` at Mac load 37, with no store failure, and passed alone at load
   records the failed push to `search`), so about 4 writes per edit and
   about 1,200 writes in one invocation. That is a test-design cost, not a
   production burst: in production each edit is its own request, about 4-5
-  commits (about 1 s on ATLAS), and K38 does not change it (the edit
-  touches three collections).
+  commits today (K38 later makes it 2: the edit with its change rows, and
+  the relay's save).
 - **Builds:** the test proves the same rule (many edits while `search` is
   down leave ONE waiting `message.edited`, and the message document stays
   under 512 KiB) with 15 edits of about 39,000 characters (the edit limit
@@ -3648,8 +3604,7 @@ Release blockers:
   this fix (DB-3 or later); no Mesail code change. The restore drill
   (K31) runs on that FYLO.
 - **Write speed on ATLAS:** OPERATIONS.md section 7.6's measurement; K38
-  (one FYLO transaction per collection per action) becomes a blocker if
-  reads wait too long; a slow plain send needs FYLO's cost per commit.
+  (one FYLO transaction per user action) becomes a blocker if it fails.
 - **K36:** done (develop 3d83a264): a hand-off to an unknown mailbox in
   another hosted domain is reported `bounced`, not `sent`.
 - **K34:** done (develop 9f5f6bb4): mail out to an outside address is

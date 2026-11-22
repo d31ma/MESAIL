@@ -451,12 +451,10 @@ If a check fails, Platform puts back the data kept before the restore.
   p95 and run a 10-person load (sends, mark-reads, email in and out). If a
   plain chat send's p95 is over 3 s, or a root is over 70% of its commit
   rate at peak, or a read's p95 while events apply is over 5 s, SLICES K38
-  (one FYLO transaction per collection per action) is done before go-live
-  for the bursts. A slow plain send depends on FYLO-PERF1's cost per commit
-  (K38 saves only one commit there): PERF1's table decides whether Mesail
-  also needs a "fewer collections per send" slice, and whether
-  transactions across collections come back to the user. K37 (at most 25
-  writes per call) is done in any case.
+  (one FYLO transaction per user action; the user's "Yes, several (Rec.)"
+  on transactions across collections) is done before go-live. With K38 a
+  plain send is 2 commits and every burst 1. K37 (at most 25 writes per
+  call) is done in any case.
 - The FYLO release Mesail ships with has `fylo restore-doc`, or the
   whole-collection path of 7.4 is accepted for one-document restores
   (through the hub).
