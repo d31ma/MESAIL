@@ -226,8 +226,12 @@ disk (`ESYSTEMDISK`). So:
   (ADR 0004 section 4) becomes `/Volumes/MESAIL/<app>.vol/<app>` (K46),
   opened by FYLO as a network root with leases on a `hard` NFS mount
   (needs a FYLO build with L1-5, DB-1 or later).
-- The blob folder stays one shared folder (ADR 0007 section 7), mounted
-  by attachments, mail-in, mail-out, the router and the SMTP edge.
+- The blob folder stays one shared folder (ADR 0007 section 7): the
+  static PV of `blobs.vol`, bound to one PVC that attachments, mail-in,
+  mail-out, the router and the SMTP edge all use (they run on the one node,
+  so `ReadWriteOnce` allows it). Every one of them mounts it at `/blobs`,
+  never nested inside another PV (for example at `/mnt/data/blobs`): the
+  runtime would then make a root-owned mount folder inside that PV.
 
 ### 6. What does not change
 
