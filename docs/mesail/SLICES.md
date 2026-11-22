@@ -3650,6 +3650,73 @@ user-visible.
   from send to delivery is at most about 65 s; `gates.sh` for mail-in and
   the K33 flow tests pass.
 
+## Wave K3s: Mesail runs on K3s, as on kestrel (ADR 0014, from K41)
+The user's decisions (2026-11-21, quoted through the hub): "for Mesail i
+think we should use K3s ...", then "Yes, all to K3s (Rec.)" and "actually
+let mimic kestrel, no Floci. run k3s here as you would in kestrel". The
+plan: `k3s-plan.md` in the MESAIL Build Coordinator's notes; the approved
+downloads: `k3s-downloads.md` there ("Copies from kestrel (Rec.),Zot +
+skopeo (Rec.),Flux too, like kestrel"). The model is kestrel's K3s pilot
+(PaaS `apps/k3s-pilot`). Floci keeps today's tests green until K45.
+
+**ADR 0014 outline** (written in K41): Mesail runs on K3s on this Mac and
+on kestrel; it supersedes ADR 0007 section 4 (Lambda images in Floci on
+kestrel) and ADR 0004 section 4's Lambda packaging. It keeps:
+- one writer per FYLO root: a Deployment with replicas 1, strategy
+  `Recreate`, terminationGracePeriodSeconds 30 s or more, and a clean
+  FYLO close on SIGTERM (FYLO's 20 s lease and fencing cover a crash);
+- FYLO's root rule (a root's parent is a mount point): one folder per app,
+  `<area>/<app>.vol/<app>`, mounted by subPath at `/mnt/data`, root
+  `/mnt/data/<app>`; never a hostPath on the boot disk;
+- images in Zot inside the cluster, pushed with skopeo and pulled by
+  digest only; deploys by Flux from git with kustomize overlays (`dev`,
+  `kestrel`); no Helm;
+- plain Deployments, no Knative (one pod per FYLO root, no rollout
+  overlap, no cold reopen of FYLO);
+- the on-premise rules of ADR 0007 (no cloud, outgoing traffic only to
+  declared hosts, network policies that deny by default).
+
+### K41. ADR 0014 and the K3s node in the dev host (4-6 hours)
+Brief: `k41-brief.md` in the MESAIL Build Coordinator's notes. ADR 0014;
+K3s v1.37.2+k3s1 in the `mesail` dev host from the airgap files copied
+from kestrel; Zot on the new HANGAR image disk; namespaces and policies;
+`scripts/k3s/node-check.sh` (a test image by digest, a FYLO root write and
+read with the subPath layout, the guest's memory). Done when ADR 0014 is
+on develop, the node check passes and Platform signs off.
+
+### K42. Images to Zot (3-4 hours, after K41)
+A `container` image target for every app (`YON_PROFILE=container`, no
+Lambda Web Adapter); `scripts/k3s/push.sh` with skopeo, recording each
+manifest digest and refusing a mismatch; the digests written into the
+overlay; a check that no manifest names a tag. Done when every Mesail
+image is in Zot by digest.
+
+### K43. Manifests, the dev overlay and Flux (6-8 hours, after K42)
+`deploy/k3s/base` (Deployments, Services, volumes, network policies,
+the router in proxy mode, the schedulers, Keycloak with SQLite on a local
+volume, the SMTP edge) and `overlays/dev` (the relay sink, test keys and
+people); `scripts/k3s/{up,deploy,test,down}.sh`; Flux from `develop` once
+the user confirms the read-only GitHub deploy key. In three steps, each
+with the blackbox suite: (1) Keycloak, identity, the router and the web
+apps; (2) directory, the first FYLO owner; (3) all the rest. Done when the
+whole blackbox suite (K33's flows included) passes on K3s.
+
+### K44. MSL-INT and the nightly on K3s (2-3 hours, after K43)
+MSL-INT's harness and the nightly get the K3s target. Done when two
+nightly runs pass on K3s.
+
+### K45. Switch-over: Floci retired for Mesail (2 hours, after K44)
+K3s becomes the default stack; `scripts/floci` stays one week, then goes;
+Floci and Docker leave the dev host; the deploy README, OPERATIONS.md and
+the SLICES rules that name Floci are updated. Done when nothing runs Floci
+for Mesail.
+
+### K46. The kestrel overlay (4-6 hours, with Platform and PaaS; production blocker)
+`overlays/kestrel` (the `/Volumes/MESAIL/<app>.vol` mounts, port 25, the
+operator's settings, no test parts), and PaaS's Flux pointing at it. Each
+kestrel and CITADEL change needs the user's yes. Done when the kestrel
+overlay deploys to kestrel's cluster and the blackbox suite passes there.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
@@ -3701,6 +3768,9 @@ Release blockers:
   (OPERATIONS.md section 7.4) is accepted through the hub.
 - **K37:** mail-out's deliver job and notify's fan-out stay within 25
   writes per call.
+- **K3s (K41-K46):** Mesail runs on K3s on kestrel (ADR 0014); kestrel
+  no longer runs Floci, so the Lambda-in-Floci production plan (OP2) is
+  replaced.
 - **FYLO with the crash fix:** a known FYLO bug (also in the released
   26.45.07): after a crash only, a document deleted after an earlier save
   can come back (with a copy in `.deleted`). Normal running is fine. The
