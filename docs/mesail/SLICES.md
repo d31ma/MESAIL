@@ -3733,11 +3733,25 @@ explicitly (40 for FYLO owners, at most 120 for any), so the dev host's
 drain before a VM stop (`kubectl drain --grace-period=-1 --timeout=150s`)
 lets FYLO close cleanly. PaaS develop's static check refuses manifests
 that break its rules, so build them in from the start: no
-PodDisruptionBudget that blocks a single replica, no DaemonSets, only
-local-path PVCs on the data disk, never a hostPath into the OS disk. Each
-FYLO app a local-path volume `<data disk>/k3s/<app>.vol` mounted at
-`/mnt/data` (root `/mnt/data/<app>`); Keycloak's SQLite and the blobs on
-the data disk. Loopback ports on the Mac: Zot 15000 (Zot is a ClusterIP
+PodDisruptionBudget that blocks a single replica, no DaemonSets, never a
+hostPath into the OS disk. **Volumes are static local PVs, not
+local-path** (decided 2026-11-21 with MSL-K41's probe): with local-path the
+kubelet creates a missing subPath folder as root, and a non-root pod under
+pod-security `restricted` cannot create its FYLO root there (a root init
+container is not allowed). So the node layer (K41's
+`scripts/k3s/node-folders.sh`, run as root through `mesail-devhost exec`
+before Flux applies) makes each folder under `/mnt/mesail-data/apps/`,
+owned by the app user uid and gid 10001, mode 0700; each folder gets one
+`local` PersistentVolume (storage class `mesail-local` with no
+provisioner, `reclaimPolicy: Retain`, node affinity to the one node) and
+one PVC bound to it by `volumeName`. Retain also means deleting a PVC
+never deletes data. Every Mesail image, Keycloak included, runs as 10001
+(K42). The script refuses a folder that exists with another owner, and
+never deletes a folder. Each
+FYLO app a static local volume `/mnt/mesail-data/apps/<app>.vol` mounted at
+`/mnt/data` (root `/mnt/data/<app>`); Keycloak's SQLite
+(`keycloak.vol`) and the blobs (`blobs.vol`) the same way on the data
+disk. Loopback ports on the Mac: Zot 15000 (Zot is a ClusterIP
 Service; K41's `kubectl port-forward --address 127.0.0.1 service/zot
 30500:5000` unit puts it on the guest loopback 127.0.0.1:30500, which
 Lima forwards to the Mac; ADR 0014 section 7); no K3s API forward (kubectl runs through `mesail-devhost exec`);
