@@ -3659,6 +3659,23 @@ downloads: `k3s-downloads.md` there ("Copies from kestrel (Rec.),Zot +
 skopeo (Rec.),Flux too, like kestrel"). The model is kestrel's K3s pilot
 (PaaS `apps/k3s-pilot`). Floci keeps today's tests green until K45.
 
+**The development platform: PaaS `develop`** (the user: "use it stictly for
+development, it does not merge to staging" and "the develop branch is the
+same as the staging, but for local development (localhost) and NEVER
+exposed to the internet"). A new `develop` branch in PaaS, made from
+`staging` by the PAAS Build Coordinator, never merged to `staging` or
+`production`. Localhost only: every port forwarded to `127.0.0.1` on this
+Mac (K3s API, Zot, router, Keycloak, SMTP edge); no Tailscale, front door,
+public host names, DNS records or certificates; outgoing traffic only to
+declared hosts. Split: PaaS `develop` holds the cluster declaration for
+this Mac (K3s settings, Zot, Flux, cluster-wide objects, and Flux's source
+pointing at Mesail's `develop`); Mesail's repository holds ADR 0014,
+`deploy/k3s/base`, the `dev` and `kestrel` overlays, `scripts/k3s` and the
+tests. Whether the node is Mesail's dev host or a VM that PaaS declares is
+decided with the PaaS BC and Platform; K41's disk layout stays either way.
+Production on kestrel still comes from PaaS `production`, through
+`staging` (K46).
+
 **ADR 0014 outline** (written in K41): Mesail runs on K3s on this Mac and
 on kestrel; it supersedes ADR 0007 section 4 (Lambda images in Floci on
 kestrel) and ADR 0004 section 4's Lambda packaging. It keeps:
