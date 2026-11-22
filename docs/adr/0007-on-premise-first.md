@@ -14,6 +14,11 @@
   export, the user: "Mesail-only area (Rec.)"), not a data disk inside
   the VM (the user: "FYLO folders on ATLAS (Rec.)"). Keycloak's SQLite file is not
   put on the share (OPERATIONS.md section 7).
+- Superseded in part 2026-11-21 by [ADR 0014](0014-mesail-runs-on-k3s.md):
+  section 4 (Lambda images in Floci on kestrel) no longer applies. Mesail
+  runs on K3s, as kestrel's K3s pilot, with Zot, skopeo and Flux. The
+  other sections stay; read the Floci rows of section 5 with ADR 0014
+  section 6.
 - Spec: [SPEC.md](../mesail/SPEC.md) AC-OP-4 to AC-OP-8. Slices:
   [SLICES.md](../mesail/SLICES.md) "Wave 5: on-premise".
 - Amended 2026-11-12 by [ADR 0011](0011-chat-goes-device-to-device.md):

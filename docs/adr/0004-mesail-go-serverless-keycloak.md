@@ -168,6 +168,12 @@ kit/            shared plain Go packages (source of truth)
   inside `web`.
 
 ### 4. Every Yon service is a Lambda container image, one writer per (service, domain)
+> Superseded in part 2026-11-21 by [ADR 0014](0014-mesail-runs-on-k3s.md):
+> the Lambda "Packaging" and the per-function form of "One writer per
+> (service, domain)" no longer apply. Each Yon app is a K3s Deployment
+> (replicas 1, Recreate) with its FYLO root at `/mnt/data/<app>` through a
+> subPath mount. One writer per root, the bounded work per call and the
+> other rules below stay.
 > Amended by ADR 0007 (on-premise first): on-premise production runs these
 > Lambda images in Floci on kestrel (SPEC Q18, decided), in a dedicated VM
 > with no route out except one egress container. SES, S3 plus CloudFront,
