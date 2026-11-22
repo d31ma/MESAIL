@@ -101,7 +101,19 @@ check_flux() {
   kubectl_guest -n flux-system get gitrepositories,kustomizations 2>&1 || true
 }
 
+k3s_disk_percent() {
+  guest df --output=pcent "$(pin disks.images)" | tail -1 | tr -dc '0-9'
+}
+
+warn_when_k3s_disk_full() {
+  local percent
+  percent=$(k3s_disk_percent)
+  echo "K3s disk $(pin disks.images): ${percent}% used"
+  [ "$percent" -le 85 ] || echo "node-check: WARNING the K3s disk is over 85%; tell Platform"
+}
+
 report_numbers() {
+  warn_when_k3s_disk_full
   guest free -m
   guest df -h / "$(pin disks.images)" "$(pin disks.data)"
   kubectl_guest top node 2>&1 || echo "metrics not ready yet"

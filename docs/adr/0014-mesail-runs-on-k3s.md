@@ -55,11 +55,18 @@ than from a separate Mesail-only setup. The decisions below (K3s, Zot,
 skopeo, Flux, kustomize, Deployments, FYLO roots) stay; only where the
 node's files live may move to PaaS.
 
+The owner added: "the develop branch is the same as the staging, but for
+local development (localhost) and NEVER exposed to the internet". So
+everything this node adds listens on the Mac's loopback only (section 7,
+"Reach").
+
 Open (2026-11-21, MSL-K41): the PaaS repository has no `develop` branch
 yet, on GitHub or in any checkout on this Mac; its long-lived branches are
-`production` and `staging`. Until the PaaS owner creates `develop` and the
-updated plan names what moves there, `deploy/k3s/` in Mesail holds the
-node files, copied from the pilot on `production` at `925e679a`.
+`production` and `staging`. A PaaS Build Coordinator will create `develop`
+from `staging`. Until then, `deploy/k3s/` in Mesail holds the node files,
+copied from the pilot at `925e679a`; `apps/k3s-pilot` on `staging`
+(`6e6aa3b3d`) is the same (its newer commits change only runbooks, the
+README and a snippet test).
 
 ## Decision
 
@@ -192,12 +199,13 @@ disk (`ESYSTEMDISK`). So:
 | --- | --- | --- | --- |
 | VM | its own Lima VM `paas-k3s-pilot`, 4 vCPU, 4 GiB | the existing `mesail` dev host (Lima, vz), 6 vCPU, 8 GiB | a third VM breaks the Mac's 2-VM cap; the dev host already has the `--vm=mesail` lock (Platform's choice) |
 | Node name | `paas-k3s-pilot` | `mesail` | the dev host's name |
-| Images and local volumes | K3s state and images in `/var/lib/rancher/k3s` on the VM's OS disk; local-path on the pilot's data disk on ATLAS | `/var/lib/rancher/k3s` bound by the dev host supervisor onto a new sparse image disk on HANGAR (25 GiB cap, mounted by UUID at `/mnt/mesail-k3s`); local-path and FYLO roots on the existing data disk | development never uses ATLAS or HAVEN; the dev host's OS disk is already 76% full; HANGAR holds the VMs and virtual disks |
+| Images and local volumes | K3s state and images in `/var/lib/rancher/k3s` on the VM's OS disk; local-path on the pilot's data disk on ATLAS | `/var/lib/rancher/k3s` bound by the dev host supervisor onto a new sparse image disk on HANGAR (30 GiB cap, mounted by UUID at `/mnt/mesail-k3s`); local-path and FYLO roots on the existing data disk | development never uses ATLAS or HAVEN; the dev host's OS disk is already 76% full; HANGAR holds the VMs and virtual disks |
 | Start at boot | `k3s.service` enabled at boot | `k3s.service` installed but never enabled; the dev host supervisor starts it after the image disk is mounted and bound | a K3s started before the bind writes to the VM's OS disk, the bind is then refused (the folder is not empty) and the whole dev host is blocked |
 | Zot's store | its own 64 GiB disk on HAVEN | the HANGAR image disk | the same rule |
 | Zot retention | the 3 most recently pushed tags | the last 2 digests | HANGAR is small (about 29 GiB free on 2026-11-21) |
 | Mirror name | `registry.paas.local` | `registry.mesail.local` | Mesail's own images; the `kestrel` overlay sets kestrel's name (K46) |
 | K3s API | forwarded to `127.0.0.1:16443` on kestrel | not forwarded; on the guest's loopback only, reached with `mesail-devhost exec kubectl ...` | other sessions on this Mac must not reach the cluster outside the dev host's lock |
+| Reach | the private front door and Tailscale serve chosen hosts (`lamp.del.ma`, `store.del.ma`) | nothing is served beyond this Mac: the only host ports are Lima forwards to `127.0.0.1` (Zot 15000 and the existing Mesail ports); the K3s API, kubelet and NodePorts stay inside the VM, whose Lima network the LAN cannot reach | the owner: the development platform is "for local development (localhost) and NEVER exposed to the internet" |
 | Flux source | the PaaS repository over SSH with a deploy key | the Mesail repository, branch named by the `dev` overlay | Mesail's manifests live in Mesail (K46 decides PaaS's pointer with Platform) |
 | Knative, Kourier, Headlamp | installed | not installed | Mesail uses plain Deployments (section 1); Headlamp may come later from the pilot's pin |
 | Floci | none | keeps running beside K3s until K45 | today's blackbox suite stays green until K3s passes the same suite |
