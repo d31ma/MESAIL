@@ -18,8 +18,13 @@ func (reader SettingsReader) Read() (Settings, error) {
 			MailOut Settings `json:"mailout"`
 		} `json:"yon"`
 	}
+	snapshot.Yon.MailOut = reader.secureDefaults()
 	err := json.Unmarshal([]byte(reader.Environment(reader.variable())), &snapshot)
 	return reader.withDefaults(snapshot.Yon.MailOut), reader.switchProblem(err)
+}
+
+func (SettingsReader) secureDefaults() Settings {
+	return Settings{RelayRequireTls: true}
 }
 
 func (SettingsReader) switchProblem(err error) error {

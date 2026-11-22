@@ -616,7 +616,9 @@ it.
   be tested.
 - **mail-out:** `stack.json` `lambdaSettings.mail-out` sets
   `YON_MAILOUT_RELAYADDRESS=127.0.0.1:12526`,
-  `YON_MAILOUT_RELAYREQUIRETLS=false` (the sink has no TLS) and adds
+  `YON_MAILOUT_RELAYREQUIRETLS=false` (the sink has no TLS; these two keys are
+  not in `apps/mail-out/server/application.json`, because TACHYON refuses an
+  environment value for a key the file already has, TY2010) and adds
   `12526=relay-sink:2525` to `MESAIL_FORWARDS`: the outgoing request guard
   refuses Docker's private addresses, and `127.0.0.1` is already in
   `mail-out`'s `outgoing.hosts`, so the local forwarder is the allowed way.

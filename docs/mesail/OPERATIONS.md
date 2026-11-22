@@ -129,11 +129,17 @@ Names are environment variables or `application.json` keys of the apps.
 
 | Setting | Meaning |
 | --- | --- |
-| `mailout.relayaddress` | Your relay, as `host:port`. Empty means no relay. |
+| `YON_MAILOUT_RELAYADDRESS` | Your relay, as `host:port`. Absent or empty means no relay. |
 | `YON_MAILOUT_RELAYUSERNAME`, `YON_MAILOUT_RELAYPASSWORD` | The relay's login, from secret files. |
-| `mailout.relayrequiretls` | `true` (default): refuse a relay without TLS. |
+| `YON_MAILOUT_RELAYREQUIRETLS` | `true` (also when absent): refuse a relay without TLS. Only `false` turns it off. |
 | `mailout.directenabled` | `true` to deliver straight to recipients' mail servers on port 25 instead of a relay. Needs outbound port 25 and reverse DNS. |
 | `mailout.heloname` | The name the install uses in SMTP; it should match your reverse DNS. |
+
+In Lambda form the relay is set as the `mail-out` function's environment
+values `YON_MAILOUT_RELAYADDRESS` and `YON_MAILOUT_RELAYREQUIRETLS` (OP2 sets
+them in production), never in `application.json`: TACHYON refuses an
+environment value for a key that `application.json` already has (TY2010),
+so `mail-out` would not start (found in K36).
 
 With neither a relay nor direct delivery, mail to outside addresses is
 queued and never sent. Mail between your own hosted domains needs neither.

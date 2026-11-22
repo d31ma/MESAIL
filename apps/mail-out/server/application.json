@@ -37,8 +37,6 @@
     "messagingurl": "http://127.0.0.1:8104",
     "notifyurl": "http://127.0.0.1:8107",
     "directoryurl": "http://127.0.0.1:8102",
-    "relayaddress": "",
-    "relayrequiretls": true,
     "heloname": "mail-out.localhost",
     "directenabled": false,
     "secretprefix": "MESAIL_SECRET_",

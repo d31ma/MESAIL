@@ -3326,6 +3326,8 @@ has its own `tests/relaysink/Dockerfile` (not a target in the repository
 checks DKIM itself with `kit/mailauth`, so `tests/blackbox` gets no `kit`
 dependency. `deploy/floci/stack.json` sends mail-out's relay to the sink
 (`127.0.0.1:12526`, no TLS); that file is the test stack only (OP2).
+Relay settings fixed in K36's branch (TY2010): `mail-out` did not start on
+Floci until `relayaddress` and `relayrequiretls` left `application.json`.
 In the Floci stack `mail-out` has no relay (`relayaddress: ""`) and the
 SMTP edge is inbound only, so mail to an outside address can only reach
 `deferred`, and K33 cannot prove "email out" or a bounce reported back.

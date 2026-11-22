@@ -67,6 +67,39 @@ func TestSettingsReaderRefusesOtherSwitchText(t *testing.T) {
 	equal(t, true, strings.Contains(err.Error(), "mailout.directenabled"))
 }
 
+func TestSettingsReaderRequiresRelayTlsWhenTheKeyIsAbsent(t *testing.T) {
+	settings, err := readSwitches(t, `{"maxageminutes":15}`)
+	equal(t, nil, err)
+	equal(t, true, settings.RelayRequireTls.On())
+	equal(t, "", settings.RelayAddress)
+}
+
+func TestSettingsReaderRequiresRelayTlsWithNoSnapshot(t *testing.T) {
+	settings, _ := SettingsReader{Environment: func(string) string { return "" }}.Read()
+	equal(t, true, settings.RelayRequireTls.On())
+	equal(t, "", settings.RelayAddress)
+}
+
+func TestSettingsReaderTakesRelayTlsTrueAsText(t *testing.T) {
+	settings, err := readSwitches(t, `{"relayrequiretls":"true"}`)
+	equal(t, nil, err)
+	equal(t, true, settings.RelayRequireTls.On())
+}
+
+func TestSettingsReaderTakesRelayTlsFalseAsText(t *testing.T) {
+	settings, err := readSwitches(t, `{"relayrequiretls":"false","relayaddress":"127.0.0.1:12526"}`)
+	equal(t, nil, err)
+	equal(t, false, settings.RelayRequireTls.On())
+	equal(t, "127.0.0.1:12526", settings.RelayAddress)
+}
+
+func TestSettingsReaderRefusesOtherRelayTlsText(t *testing.T) {
+	_, err := readSwitches(t, `{"relayrequiretls":"maybe"}`)
+	var invalid InvalidSwitch
+	equal(t, true, errors.As(err, &invalid))
+	equal(t, true, strings.Contains(err.Error(), `"maybe"`))
+}
+
 func TestSettingsReaderRefusesANumberForASwitch(t *testing.T) {
 	_, err := readSwitches(t, `{"relayrequiretls":1}`)
 	var invalid InvalidSwitch
