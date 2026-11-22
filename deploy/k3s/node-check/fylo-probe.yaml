@@ -71,7 +71,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: fylo-probe-PROBE_MODE
+  name: fylo-probe-__PROBE_MODE__
   namespace: node-check
 spec:
   backoffLimit: 0
@@ -88,7 +88,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: probe
-          image: registry.mesail.local/mesail/node-check-probe@sha256:PROBE_DIGEST
+          image: registry.mesail.local/mesail/node-check-probe@sha256:__PROBE_DIGEST__
           command:
             - /bin/bash
             - /opt/probe/probe.sh
@@ -96,9 +96,9 @@ spec:
             - name: HOME
               value: /tmp
             - name: PROBE_MODE
-              value: PROBE_MODE
+              value: __PROBE_MODE__
             - name: PROBE_MARKER
-              value: PROBE_MARKER
+              value: __PROBE_MARKER__
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

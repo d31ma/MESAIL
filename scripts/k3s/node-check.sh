@@ -74,7 +74,7 @@ pull_by_digest() {
 
 probe_manifest() {
   local digest="${1#sha256:}" mode="$2" marker="$3"
-  sed -e "s/PROBE_DIGEST/$digest/" -e "s/PROBE_MODE/$mode/g" -e "s/PROBE_MARKER/$marker/" \
+  sed -e "s/__PROBE_DIGEST__/$digest/" -e "s/__PROBE_MODE__/$mode/g" -e "s/__PROBE_MARKER__/$marker/" \
     "$(node_check_root)/deploy/k3s/node-check/fylo-probe.yaml"
 }
 
