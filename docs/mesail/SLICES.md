@@ -3713,7 +3713,7 @@ Lambda Web Adapter; Keycloak's URL, the service base and the forwards from
 the environment at run time); the web apps' bundles in the router image or
 a small static image; `scripts/k3s/build-push.sh` (from
 `scripts/floci/build.sh`, a `mesail-docker` root job) with skopeo to
-Zot at 127.0.0.1:25000, tagging `<sha12>-<app>`, recording each manifest digest and refusing a
+Zot at 127.0.0.1:15000, tagging `<sha12>-<app>`, recording each manifest digest and refusing a
 mismatch; `digests.yaml` sent to PaaS for its `env/develop/pins.yaml`. Done when every Mesail
 image is in Zot by digest.
 
@@ -3730,9 +3730,11 @@ roots, digests). Each Mesail workload: a Deployment, replicas 1,
 `Recreate`, a ClusterIP Service, terminationGracePeriodSeconds 30; each
 FYLO app a local volume `<data disk>/k3s/<app>.vol` mounted at
 `/mnt/data` (root `/mnt/data/<app>`); Keycloak's SQLite and the blobs on
-the data disk. Loopback ports on the Mac (PaaS develop's list): the K3s API
-26443, Zot 25000, the router 28080, Keycloak 28180, the SMTP edge 22525;
-the last three move back to Floci's 18080, 18180 and 12525 at K45. In three steps, each with the blackbox suite: (1)
+the data disk. Loopback ports on the Mac: Zot 15000 (the guest's NodePort
+30500); no K3s API forward (kubectl runs through `mesail-devhost exec`);
+planned for the apps (a PaaS request with K43): the router 28080,
+Keycloak 28180, the SMTP edge 22525, which move back to Floci's 18080,
+18180 and 12525 at K45. In three steps, each with the blackbox suite: (1)
 Keycloak, identity, the router and the web apps; (2) directory; (3) all
 the rest. Done when the whole blackbox suite (K33's flows included) passes
 on K3s.
