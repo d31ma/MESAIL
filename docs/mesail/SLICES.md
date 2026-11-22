@@ -3759,11 +3759,12 @@ and settings. FYLO lease rules for network roots (FYLO-L1-3,
 2026-11-21): one replica with `Recreate`, a grace period long enough for
 FYLO's clean stop (a crash or liveness kill costs a 20 s takeover wait);
 the same `FYLO_LEASE_HEARTBEAT_SECONDS` and `FYLO_LEASE_TAKEOVER_SECONDS`
-in every pod; the takeover time must exceed the heartbeat plus the pod's
-NFS attribute cache delay (Linux defaults to acdirmin 30 s), so mount
-the FYLO volumes with `actimeo=3` or set the takeover to 60 s or more,
-and measure from a pod before trusting 20 s; FYLO at or after slice
-L1-3b (the fencing check before every commit-log append). Each
+in every pod; FYLO at or after slice L1-3b, which adds the fencing
+check before every commit-log append and rewrites the lease record in
+place, read with a fresh open each check, so NFS attribute caching no
+longer delays a takeover (`actimeo=3` becomes optional once FYLO's
+two-machine NFS bench passes; until then mount the FYLO volumes with
+`actimeo=3`); measure the takeover from a pod before go-live. Each
 kestrel and CITADEL change needs the user's yes. Done when the kestrel
 overlay deploys to kestrel's cluster and the blackbox suite passes there.
 
