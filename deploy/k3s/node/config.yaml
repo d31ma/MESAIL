@@ -1,0 +1,9 @@
+write-kubeconfig-mode: "0600"
+node-name: mesail
+secrets-encryption: true
+disable:
+  - traefik
+  - servicelb
+tls-san:
+  - 127.0.0.1
+default-local-storage-path: /mnt/mesail-k3s/local-path

@@ -1,0 +1,34 @@
+{
+  "source": "d31ma/PaaS apps/k3s-pilot/deployment.json at 925e679a",
+  "node_name": "mesail",
+  "k3s": {
+    "version": "v1.37.2+k3s1",
+    "files": {
+      "k3s-arm64": "a779ccf1e5e2e33a62f5a29c2f1c0bbf99431e100579d4c10f0aa0742a6aa84b",
+      "k3s-airgap-images-arm64.tar.zst": "ca384f1a77aa83024bd82ad26fa4774971adb038e656a3b5b9af926be445a442"
+    }
+  },
+  "flux": {
+    "version": "v2.10.0",
+    "files": {
+      "flux-install.yaml": "a8c838ccd9be5d30eba9df87cd229b7c4eb80c0049fba1bc3b9840829f267f28"
+    },
+    "images": {
+      "source-controller": "ghcr.io/fluxcd/source-controller@sha256:611b6bca3eae95bcff471414d1fb14a4ab83d7f14e609cccef2bd389c121f37e",
+      "kustomize-controller": "ghcr.io/fluxcd/kustomize-controller@sha256:37db29b25dae35b881a5e064acedb0cc954442da453a39eaa0eab7a90dbecc4e"
+    }
+  },
+  "registry": {
+    "version": "v2.1.23",
+    "image": "ghcr.io/project-zot/zot-linux-arm64@sha256:14006bb4ca46e1bc250f3fc227b850fe1f7a9f5a751869af684f3b65cdb2c713",
+    "node_port": 30500,
+    "host_port": 15000,
+    "mirror": "registry.mesail.local",
+    "pusher": "pusher"
+  },
+  "disks": {
+    "images": "/mnt/mesail-k3s",
+    "data": "/mnt/mesail-data",
+    "app_area": "/mnt/mesail-data/apps"
+  }
+}

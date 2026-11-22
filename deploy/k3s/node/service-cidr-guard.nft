@@ -1,0 +1,6 @@
+table inet mesail_service_cidr_guard {}
+delete table inet mesail_service_cidr_guard
+table inet mesail_service_cidr_guard {
+  chain forward { type filter hook forward priority 10; oifname "eth0" ip daddr 10.43.0.0/16 reject; }
+  chain output { type filter hook output priority 10; oifname "eth0" ip daddr 10.43.0.0/16 reject; }
+}

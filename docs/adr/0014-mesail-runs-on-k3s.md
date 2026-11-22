@@ -105,8 +105,9 @@ whose checksum differs stops the install.
   push; nobody may delete. The push password is made once inside the
   cluster, kept in a Secret and a 0600 auth file outside the repository,
   and never printed.
-- **Reach:** Zot's NodePort is forwarded to the host's loopback only
-  (`127.0.0.1`). Nothing on the LAN reaches it.
+- **Reach:** Zot's NodePort 30500 is forwarded to the host's loopback
+  only, `127.0.0.1:15000` (the same port on this Mac and on kestrel).
+  Nothing on the LAN reaches it.
 - **Push:** `skopeo copy docker-daemon:<image> docker://127.0.0.1:<port>/mesail/<app>:<tag>`
   from the host, with the pusher's auth file.
 - **Pull:** `/etc/rancher/k3s/registries.yaml` sends
@@ -173,10 +174,9 @@ disk (`ESYSTEMDISK`). So:
 | --- | --- | --- | --- |
 | VM | its own Lima VM `paas-k3s-pilot`, 4 vCPU, 4 GiB | the existing `mesail` dev host (Lima, vz), 6 vCPU, 8 GiB | a third VM breaks the Mac's 2-VM cap; the dev host already has the `--vm=mesail` lock (Platform's choice) |
 | Node name | `paas-k3s-pilot` | `mesail` | the dev host's name |
-| Images and local volumes | the pilot's data disk on ATLAS | a new sparse image disk on HANGAR, 25 GiB cap, mounted by UUID | development never uses ATLAS or HAVEN; HANGAR holds the VMs and virtual disks |
+| Images and local volumes | K3s state and images on the VM's OS disk; local-path on the pilot's data disk on ATLAS | a new sparse image disk on HANGAR, 25 GiB cap, mounted by UUID at `/mnt/mesail-k3s`; `/var/lib/rancher` is bound onto it | development never uses ATLAS or HAVEN; the dev host's OS disk is already 76% full; HANGAR holds the VMs and virtual disks |
 | Zot's store | its own 64 GiB disk on HAVEN | the HANGAR image disk | the same rule |
 | Zot retention | the 3 most recently pushed tags | the last 2 digests | HANGAR is small (about 29 GiB free on 2026-11-21) |
-| Zot host port | `127.0.0.1:15000` on kestrel | a free loopback port on the Mac, set in `deploy/k3s/` | 15000 is not reserved here; the address stays loopback only |
 | Mirror name | `registry.paas.local` | `registry.mesail.local` | Mesail's own images; the `kestrel` overlay sets kestrel's name (K46) |
 | K3s API | forwarded to `127.0.0.1:16443` on kestrel | not forwarded; on the guest's loopback only, reached with `mesail-devhost exec kubectl ...` | other sessions on this Mac must not reach the cluster outside the dev host's lock |
 | Flux source | the PaaS repository over SSH with a deploy key | the Mesail repository, branch named by the `dev` overlay | Mesail's manifests live in Mesail (K46 decides PaaS's pointer with Platform) |

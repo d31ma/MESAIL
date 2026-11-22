@@ -1,0 +1,11 @@
+[Unit]
+Description=Reject untranslated Kubernetes service traffic before it leaves the VM (MESAIL deploy/k3s/node, as d31ma/PaaS apps/k3s-pilot)
+Before=k3s.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/mesail-service-cidr-guard.nft
+
+[Install]
+WantedBy=multi-user.target

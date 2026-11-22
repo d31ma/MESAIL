@@ -1,0 +1,13 @@
+[Unit]
+Description=K3s state on the Mesail image disk (MESAIL deploy/k3s/node)
+RequiresMountsFor=/mnt/mesail-k3s
+ConditionPathIsMountPoint=/mnt/mesail-k3s
+
+[Mount]
+What=/mnt/mesail-k3s/rancher
+Where=/var/lib/rancher
+Type=none
+Options=bind
+
+[Install]
+WantedBy=multi-user.target

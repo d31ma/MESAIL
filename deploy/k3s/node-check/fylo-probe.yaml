@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-check
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: node-check-apps
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  local:
+    path: /mnt/mesail-data/apps
+  claimRef:
+    namespace: node-check
+    name: apps
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - mesail
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: apps
+  namespace: node-check
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: node-check-apps
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fylo-probe
+  namespace: node-check
+data:
+  probe.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    mountpoint -q /mnt/data || { echo "probe: /mnt/data is not a mount point"; exit 1; }
+    requests() {
+      printf '%s\n' '{"op":"handshake"}'
+      if [ "$PROBE_MODE" = write ]; then
+        printf '%s\n' '{"op":"createCollection","collection":"probe"}'
+        printf '{"op":"putData","collection":"probe","data":{"marker":"%s"}}\n' "$PROBE_MARKER"
+      fi
+      printf '%s\n' '{"op":"findDocs","collection":"probe","query":{"$ops":[]},"page":{"limit":256}}'
+    }
+    answers=$(requests | fylo exec --loop --root /mnt/data/nodecheck)
+    echo "$answers"
+    grep -q "$PROBE_MARKER" <<< "$answers" || { echo "probe: marker $PROBE_MARKER not read back"; exit 1; }
+    echo "probe: $PROBE_MODE ok, root /mnt/data/nodecheck"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fylo-probe-PROBE_MODE
+  namespace: node-check
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: probe
+          image: registry.mesail.local/mesail/node-check-probe@sha256:PROBE_DIGEST
+          command:
+            - /bin/bash
+            - /opt/probe/probe.sh
+          env:
+            - name: PROBE_MODE
+              value: PROBE_MODE
+            - name: PROBE_MARKER
+              value: PROBE_MARKER
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: apps
+              mountPath: /mnt/data
+              subPath: nodecheck.vol
+            - name: probe
+              mountPath: /opt/probe
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: apps
+          persistentVolumeClaim:
+            claimName: apps
+        - name: probe
+          configMap:
+            name: fylo-probe
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-egress
+  namespace: node-check
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress

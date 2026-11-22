@@ -1,0 +1,217 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: registry-data
+spec:
+  capacity:
+    storage: 15Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  local:
+    path: /mnt/mesail-k3s/registry
+  claimRef:
+    namespace: registry
+    name: zot-data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - mesail
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zot-data
+  namespace: registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: registry-data
+  resources:
+    requests:
+      storage: 15Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zot-config
+  namespace: registry
+data:
+  config.json: |
+    {
+      "distSpecVersion": "1.1.1",
+      "storage": {
+        "rootDirectory": "/var/lib/registry",
+        "dedupe": true,
+        "gc": true,
+        "gcDelay": "1h",
+        "gcInterval": "24h",
+        "retention": {
+          "delay": "24h",
+          "policies": [
+            {
+              "repositories": ["**"],
+              "deleteReferrers": false,
+              "deleteUntagged": true,
+              "keepTags": [
+                {
+                  "mostRecentlyPushedCount": 2
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "http": {
+        "address": "0.0.0.0",
+        "port": "5000",
+        "auth": {
+          "htpasswd": {
+            "path": "/etc/zot-auth/htpasswd"
+          }
+        },
+        "accessControl": {
+          "repositories": {
+            "**": {
+              "anonymousPolicy": ["read"],
+              "policies": [
+                {
+                  "users": ["pusher"],
+                  "actions": ["read", "create", "update"]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "log": {
+        "level": "info"
+      },
+      "extensions": {
+        "scrub": {
+          "enable": true,
+          "interval": "24h"
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zot
+  namespace: registry
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: zot
+  template:
+    metadata:
+      labels:
+        app: zot
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10002
+        runAsGroup: 10002
+        fsGroup: 10002
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: zot
+          image: ghcr.io/project-zot/zot-linux-arm64@sha256:14006bb4ca46e1bc250f3fc227b850fe1f7a9f5a751869af684f3b65cdb2c713
+          args:
+            - serve
+            - /etc/zot/config.json
+          ports:
+            - name: registry
+              containerPort: 5000
+          readinessProbe:
+            tcpSocket:
+              port: 5000
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 5000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/zot
+              readOnly: true
+            - name: auth
+              mountPath: /etc/zot-auth
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/registry
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: zot-config
+        - name: auth
+          secret:
+            secretName: zot-htpasswd
+            defaultMode: 288
+        - name: data
+          persistentVolumeClaim:
+            claimName: zot-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zot
+  namespace: registry
+spec:
+  type: NodePort
+  selector:
+    app: zot
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: 5000
+      nodePort: 30500
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-egress
+  namespace: registry
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress

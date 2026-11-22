@@ -1,0 +1,4 @@
+mirrors:
+  "registry.mesail.local":
+    endpoint:
+      - "http://127.0.0.1:30500"
