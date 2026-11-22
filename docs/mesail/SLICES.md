@@ -3667,12 +3667,11 @@ exposed to the internet"). A new `develop` branch in PaaS, made from
 `production`. Localhost only: every port forwarded to `127.0.0.1` on this
 Mac (K3s API, Zot, router, Keycloak, SMTP edge); no Tailscale, front door,
 public host names, DNS records or certificates; outgoing traffic only to
-declared hosts. Split: PaaS `develop` holds the cluster declaration for
-this Mac (K3s settings, Zot, Flux, cluster-wide objects, and Flux's source
-pointing at Mesail's `develop`); Mesail's repository holds ADR 0014,
-`deploy/k3s/base`, the `dev` and `kestrel` overlays, `scripts/k3s` and the
-tests. Whether the node is Mesail's dev host or a VM that PaaS declares is
-decided with the PaaS BC and Platform; K41's disk layout stays either way.
+declared hosts. Split (agreed with the PAAS Build Coordinator): K41 keeps the node
+layer in the `mesail` dev host; Mesail's app manifests live in PaaS
+`develop` (`clusters/mesail-dev/develop/mesail/`) and Flux reads PaaS
+with a PaaS key; Mesail's repository holds ADR 0014, the image targets,
+the router's proxy mode, `scripts/k3s` and the tests.
 Production on kestrel still comes from PaaS `production`, through
 `staging` (K46).
 
@@ -3710,23 +3709,32 @@ on develop, the node check passes and Platform signs off.
 
 ### K42. Images to Zot (3-4 hours, after K41)
 A `container` image target for every app (`YON_PROFILE=container`, no
-Lambda Web Adapter); `scripts/k3s/push.sh` with skopeo, recording each
-manifest digest and refusing a mismatch; the digests written into the
-overlay; a check that no manifest names a tag. Done when every Mesail
+Lambda Web Adapter; Keycloak's URL, the service base and the forwards from
+the environment at run time); the web apps' bundles in the router image or
+a small static image; `scripts/k3s/build-push.sh` (from
+`scripts/floci/build.sh`, a `mesail-docker` root job) with skopeo,
+tagging `<sha12>-<app>`, recording each manifest digest and refusing a
+mismatch; `digests.yaml` sent to PaaS for its `env/develop/pins.yaml`. Done when every Mesail
 image is in Zot by digest.
 
-### K43. Manifests, the dev overlay and Flux (6-8 hours, after K42)
-`deploy/k3s/base` (Deployments, Services, volumes, network policies,
-the router in proxy mode, the schedulers, Keycloak with SQLite on a local
-volume, the SMTP edge) and `overlays/dev` (the relay sink, test keys and
-people); `scripts/k3s/{up,deploy,test,down}.sh`; Flux from `develop` with
-ONE read-only GitHub deploy key on `d31ma/MESAIL` (approved: "Yes,
-read-only key (Rec.)"; the private key only as a Flux secret in the
-cluster, never printed, logged or committed; the session reports the
-key's title and fingerprint). In three steps, each
-with the blackbox suite: (1) Keycloak, identity, the router and the web
-apps; (2) directory, the first FYLO owner; (3) all the rest. Done when the
-whole blackbox suite (K33's flows included) passes on K3s.
+### K43. Mesail on the PaaS develop cluster (4-6 hours, after K42, with the PAAS Build Coordinator)
+The agreed split (2026-11-21): Mesail's app manifests live in PaaS
+`develop` under `clusters/mesail-dev/develop/mesail/`, written with the
+PAAS Build Coordinator; Flux reads PaaS `develop` with a PaaS key, so
+Mesail has no GitRepository and no deploy key of its own. Mesail's part:
+the router's proxy mode (each `/api/v1/<service>` to that app's Service),
+`scripts/k3s/secrets.sh` (creates the Secret objects on the node, never in
+git), `scripts/k3s/test.sh` (the blackbox suite against the K3s
+loopback ports), and the inputs PaaS needs (apps, ports, environment, FYLO
+roots, digests). Each Mesail workload: a Deployment, replicas 1,
+`Recreate`, a ClusterIP Service, terminationGracePeriodSeconds 30; each
+FYLO app a local volume `<data disk>/k3s/<app>.vol` mounted at
+`/mnt/data` (root `/mnt/data/<app>`); Keycloak's SQLite and the blobs on
+the data disk. Until K45 the K3s loopback ports differ from Floci's
+(18080, 18180, 12525). In three steps, each with the blackbox suite: (1)
+Keycloak, identity, the router and the web apps; (2) directory; (3) all
+the rest. Done when the whole blackbox suite (K33's flows included) passes
+on K3s.
 
 ### K44. MSL-INT and the nightly on K3s (2-3 hours, after K43)
 MSL-INT's harness and the nightly get the K3s target. Done when two
@@ -3738,9 +3746,11 @@ Floci and Docker leave the dev host; the deploy README, OPERATIONS.md and
 the SLICES rules that name Floci are updated. Done when nothing runs Floci
 for Mesail.
 
-### K46. The kestrel overlay (4-6 hours, with Platform and PaaS; production blocker)
-`overlays/kestrel` (the `/Volumes/MESAIL/<app>.vol` mounts, port 25, the
-operator's settings, no test parts), and PaaS's Flux pointing at it. Each
+### K46. Mesail on kestrel (4-6 hours, with Platform and PaaS; production blocker)
+The kestrel manifests live in PaaS too, reviewed through `staging` into
+`production` (the `/Volumes/MESAIL/<app>.vol` mounts, port 25, the
+operator's settings, no test parts); Mesail supplies the images, digests
+and settings. Each
 kestrel and CITADEL change needs the user's yes. Done when the kestrel
 overlay deploys to kestrel's cluster and the blackbox suite passes there.
 
