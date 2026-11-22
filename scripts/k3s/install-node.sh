@@ -62,6 +62,7 @@ prepare_folders() {
 
 install_units() {
   local node
+  require_k3s_bind
   node="$(install_root)/deploy/k3s/node"
   put_file "$node/service-cidr-guard.nft" /etc/mesail-service-cidr-guard.nft 0644
   put_file "$node/service-cidr-guard.service" /etc/systemd/system/mesail-service-cidr-guard.service 0644
@@ -69,7 +70,6 @@ install_units() {
   put_file "$node/zot-forward.service" /etc/systemd/system/zot-forward.service 0644
   guest sudo systemctl daemon-reload
   guest sudo systemctl enable --now mesail-service-cidr-guard.service
-  guest mountpoint -q /var/lib/rancher/k3s
 }
 
 install_k3s_binary() {
