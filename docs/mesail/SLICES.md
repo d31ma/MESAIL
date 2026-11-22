@@ -3451,7 +3451,9 @@ MESAIL Build Coordinator's notes) are replaced.
   handshake reports it with a flag, and Mesail's transaction helper
   refuses to start (a clear error, not a silent fallback) when the flag is
   missing. Same namespace only: a transaction never spans two roots or two
-  namespaces.
+  namespaces. Mesail uses only the default namespace here; K38 adds no
+  namespace use (see K40 for why: FYLO develop 154d232 does not yet
+  separate namespaces).
 - **Call shape and limits** (FYLO BC, TACHYON BC and TAC-FY2, 2026-11-21;
   check against the releases): TACHYON's `DataSource.Command` with
   `{"operation":"transaction","action":"begin"}`, writes with
@@ -3576,6 +3578,16 @@ this slice moves Mesail to the new layout with DB-1.
   (`<owner>/native/<service>` becomes namespaces too), the nightly, and
   the docs that name the old paths. Take the namespace setting from the
   FYLO and TACHYON releases Mesail pins.
+- **Namespaces must really separate data first** (TAC-FY2, 2026-11-21):
+  FYLO develop 154d232 accepts a namespace but does NOT separate data (a
+  collection written in `tenant-b` shows in the default namespace). The
+  TACHYON BC asked the FYLO BC to refuse other namespaces until a build
+  really separates them, and to name that build. Mesail uses no FYLO
+  namespaces today. So K40 starts only on the FYLO build the FYLO BC
+  names as separating namespaces, and its first step is a test that
+  proves separation (write in `slice-a`, then list and read from
+  `slice-b` and the default namespace: nothing from `slice-a` shows, and
+  the reverse); the slice stops if that test fails.
 - **Dev host:** `/mnt/data/<service>` is already a folder directly below
   the function's mount; no change.
 - **Production:** `/Volumes/MESAIL/<app>` (ADR 0004 section 4, OPERATIONS.md
