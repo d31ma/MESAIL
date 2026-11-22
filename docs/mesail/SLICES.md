@@ -3755,7 +3755,15 @@ for Mesail.
 The kestrel manifests live in PaaS too, reviewed through `staging` into
 `production` (the `/Volumes/MESAIL/<app>.vol` mounts, port 25, the
 operator's settings, no test parts); Mesail supplies the images, digests
-and settings. Each
+and settings. FYLO lease rules for network roots (FYLO-L1-3,
+2026-11-21): one replica with `Recreate`, a grace period long enough for
+FYLO's clean stop (a crash or liveness kill costs a 20 s takeover wait);
+the same `FYLO_LEASE_HEARTBEAT_SECONDS` and `FYLO_LEASE_TAKEOVER_SECONDS`
+in every pod; the takeover time must exceed the heartbeat plus the pod's
+NFS attribute cache delay (Linux defaults to acdirmin 30 s), so mount
+the FYLO volumes with `actimeo=3` or set the takeover to 60 s or more,
+and measure from a pod before trusting 20 s; FYLO at or after slice
+L1-3b (the fencing check before every commit-log append). Each
 kestrel and CITADEL change needs the user's yes. Done when the kestrel
 overlay deploys to kestrel's cluster and the blackbox suite passes there.
 
