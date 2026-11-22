@@ -150,8 +150,7 @@ whose checksum differs stops the install.
 - **Reach:** a `kubectl port-forward --address 127.0.0.1 service/zot
   30500:5000` unit (the pilot's Headlamp pattern) puts Zot on the guest's
   loopback, and Lima forwards that to the host's loopback only,
-  `127.0.0.1:25000` (kestrel uses 15000; the PAAS Build Coordinator
-  chose ports for this Mac that never clash with kestrel's). Nothing on the LAN
+  `127.0.0.1:15000` (the same host port as on kestrel). Nothing on the LAN
   reaches it.
 - **Push:** `skopeo copy docker-daemon:<image> docker://127.0.0.1:<port>/mesail/<app>:<tag>`
   from the host, with the pusher's auth file.
@@ -222,8 +221,7 @@ disk (`ESYSTEMDISK`). So:
 The development node is never exposed to the internet or the LAN:
 
 - **The Mac:** every port on the Mac is a Lima forward with
-  `hostIP: 127.0.0.1` (Zot's 25000, the API's 26443 and the existing Mesail
-  ports; the PaaS develop ports, such as 28080 for the router, come later). The dev
+  `hostIP: 127.0.0.1` (Zot's 15000 and the existing Mesail ports). The dev
   host has no shared or bridged network. PaaS's
   `tools/check_localhost_only.py --live` checks this.
 - **Services:** no `LoadBalancer`, no external IPs, no `hostPort` on a
@@ -233,18 +231,16 @@ The development node is never exposed to the internet or the LAN:
   reaches it only through a `hostIP: 127.0.0.1` forward. The node layer's
   own Service (Zot) is `ClusterIP`, reached through a
   `kubectl port-forward --address 127.0.0.1` unit in the guest.
-- **The K3s API:** forwarded to the Mac on `127.0.0.1:26443` only, for
-  PaaS's tools; work by hand goes through
-  `mesail-devhost exec sudo k3s kubectl ...`. The admin kubeconfig stays
-  in the VM (0600) and is never committed. The API is not bound to the
-  guest's loopback itself, because the pods (Flux, CoreDNS) reach it
-  through the node's address. Instead the guard
-  (`node/service-cidr-guard.nft`) rejects the API, kubelet, kube-proxy,
-  NodePort and flannel ports arriving on the VM's network interface
-  `eth0`, so from outside the VM they answer only through the loopback
-  forward.
+- **The K3s API:** the node layer does not forward it to the Mac; it is
+  reached with `mesail-devhost exec sudo k3s kubectl ...`. Any later
+  forward (for PaaS's tools) uses `hostIP: 127.0.0.1` and a port that does
+  not clash with kestrel's. It is not bound to the guest's loopback,
+  because the pods (Flux, CoreDNS) reach it through the node's address.
+  Instead the guard (`node/service-cidr-guard.nft`) rejects the API,
+  kubelet, kube-proxy, NodePort and flannel ports arriving on the VM's
+  network interface `eth0`, so they answer only inside the VM.
 - **The check:** `scripts/k3s/node-check.sh` fails when a Service is a
-  `LoadBalancer` or has external IPs, when the Mac's port 25000 or 26443 listens on
+  `LoadBalancer` or has external IPs, when the Mac's port 15000 listens on
   anything but `127.0.0.1`, or when the guard is missing.
 
 ### 8. Where this Mac differs from kestrel, and why
@@ -253,14 +249,14 @@ The development node is never exposed to the internet or the LAN:
 | --- | --- | --- | --- |
 | VM | its own Lima VM `paas-k3s-pilot`, 4 vCPU, 4 GiB | the existing `mesail` dev host (Lima, vz), 6 vCPU, 8 GiB | a third VM breaks the Mac's 2-VM cap; the dev host already has the `--vm=mesail` lock (Platform's choice) |
 | Node name | `paas-k3s-pilot` | `mesail` | the dev host's name |
-| Images and local volumes | K3s state and images in `/var/lib/rancher/k3s` on the VM's OS disk; local-path on the pilot's data disk on ATLAS | `/var/lib/rancher/k3s` bound by the dev host supervisor onto a new sparse image disk on HANGAR (30 GiB cap, mounted by UUID at `/mnt/mesail-k3s`); local-path and FYLO roots on the existing data disk | development never uses ATLAS or HAVEN; the dev host's OS disk is already 76% full; HANGAR holds the VMs and virtual disks |
+| Images and local volumes | K3s state and images in `/var/lib/rancher/k3s` on the VM's OS disk; local-path on the pilot's data disk on ATLAS | `/var/lib/rancher/k3s` bound by the dev host supervisor onto a new sparse image disk on HANGAR (made at 25 GiB, grown up to Platform's 30 GiB cap before it passes 85%; mounted by UUID at `/mnt/mesail-k3s`); local-path and FYLO roots on the existing data disk | development never uses ATLAS or HAVEN; the dev host's OS disk is already 76% full; HANGAR holds the VMs and virtual disks |
 | Start at boot | `k3s.service` enabled at boot | `k3s.service` installed but never enabled; the dev host supervisor starts it after the image disk is mounted and bound | a K3s started before the bind writes to the VM's OS disk, the bind is then refused (the folder is not empty) and the whole dev host is blocked |
 | Zot's store | its own 64 GiB disk on HAVEN | the HANGAR image disk | the same rule |
 | Zot retention | the 3 most recently pushed tags | the last 2 digests | HANGAR is small (about 29 GiB free on 2026-11-21) |
 | Mirror name | `registry.paas.local` | `registry.mesail.local` | Mesail's own images on this Mac; kestrel's manifests use kestrel's name (K46) |
-| K3s API | forwarded to `127.0.0.1:16443` on kestrel | forwarded to `127.0.0.1:26443` on the Mac; the guard rejects 6443 on `eth0` | ports for this Mac chosen by the PAAS Build Coordinator so they never clash with kestrel's; localhost only (section 7) |
-| Zot Service | NodePort 30500, forwarded by Lima to `127.0.0.1:15000` | `ClusterIP`, put on the guest loopback by a port-forward unit, forwarded by Lima to `127.0.0.1:25000` | the node layer opens no NodePort of its own; no port clash with kestrel's (section 7) |
-| Reach | the private front door and Tailscale serve chosen hosts (`lamp.del.ma`, `store.del.ma`) | nothing is served beyond this Mac: the only host ports are Lima forwards to `127.0.0.1` (Zot 25000, the API 26443 and the existing Mesail ports); kubelet and NodePorts stay inside the VM, whose Lima network the LAN cannot reach | the owner: the development platform is "for local development (localhost) and NEVER exposed to the internet" |
+| K3s API | forwarded to `127.0.0.1:16443` on kestrel | not forwarded; answers only inside the VM (the guard rejects 6443 on `eth0`); reached with `mesail-devhost exec sudo k3s kubectl ...` | other sessions on this Mac must not reach the cluster outside the dev host's lock; localhost only (section 7) |
+| Zot Service | NodePort 30500, forwarded by Lima | `ClusterIP`, put on the guest loopback by a port-forward unit, forwarded by Lima to `127.0.0.1:15000` | the node layer opens no NodePort of its own (section 7) |
+| Reach | the private front door and Tailscale serve chosen hosts (`lamp.del.ma`, `store.del.ma`) | nothing is served beyond this Mac: the only host ports are Lima forwards to `127.0.0.1` (Zot 15000 and the existing Mesail ports); the K3s API, kubelet and NodePorts stay inside the VM, whose Lima network the LAN cannot reach | the owner: the development platform is "for local development (localhost) and NEVER exposed to the internet" |
 | Flux source | the PaaS repository (`staging`, `production`) over SSH with PaaS's deploy key | PaaS `develop`, path `clusters/mesail-dev/develop`, over SSH with PaaS's own read-only develop key (made by PaaS, never by Mesail; never a kestrel pilot title) | PaaS `develop` is the development copy of `staging` (the split, above) |
 | Knative, Kourier, Headlamp | installed | not installed | Mesail uses plain Deployments (section 1); Headlamp may come later from the pilot's pin |
 | Floci | none | keeps running beside K3s until K45 | today's blackbox suite stays green until K3s passes the same suite |

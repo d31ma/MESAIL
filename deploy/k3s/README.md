@@ -36,7 +36,7 @@ the whole dev host is blocked. `install-node.sh` stops when it finds the unit en
 
 - The dev host's memory from 6 to 8 GiB.
 - The image disk, mounted at `/mnt/mesail-k3s` by UUID, with the supervisor's guards and the bind of `/var/lib/rancher/k3s` (staged in `~/.local/share/mesail-devhost-staged/k3sdisk/APPLY.md`).
-- Two Lima forwards, `hostIP: 127.0.0.1` only (ports chosen by the PAAS Build Coordinator so they never clash with kestrel's): Zot, guest `127.0.0.1:30500` -> `127.0.0.1:25000`; the K3s API, guest `127.0.0.1:6443` -> `127.0.0.1:26443`.
+- A Lima forward: guest `127.0.0.1:30500` -> `127.0.0.1:15000` on the Mac (the same host port as on kestrel).
 
 ## Order
 
@@ -59,8 +59,8 @@ This node is for local development on this Mac and is NEVER exposed to the inter
   `tools/check_localhost_only.py --live` checks it.
 - No `LoadBalancer`, external IPs, public Ingress, Tailscale or public DNS. A NodePort stays inside the VM:
   the guard rejects the K3s ports (API 6443, kubelet, kube-proxy, NodePorts, flannel) on `eth0`.
-- Zot is `ClusterIP`, reached through a port-forward on the guest's loopback and the Lima forward to `127.0.0.1:25000`.
-- `node-check.sh` fails on a `LoadBalancer` or external-IP Service, on port 25000 or 26443 listening anywhere but
+- Zot is `ClusterIP`, reached through a port-forward on the guest's loopback and the Lima forward to `127.0.0.1:15000`.
+- `node-check.sh` fails on a `LoadBalancer` or external-IP Service, on port 15000 listening anywhere but
   `127.0.0.1`, or when the guard is missing.
 
-Use the cluster through `mesail-devhost exec sudo k3s kubectl ...`. The K3s API is also forwarded to `127.0.0.1:26443` for PaaS's tools; its admin kubeconfig stays inside the VM (`/etc/rancher/k3s/k3s.yaml`, 0600) and is never copied into a repository.
+Use the cluster only through `mesail-devhost exec sudo k3s kubectl ...`. The K3s API is not forwarded to the Mac.

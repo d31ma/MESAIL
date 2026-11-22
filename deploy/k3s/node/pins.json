@@ -22,7 +22,7 @@
     "version": "v2.1.23",
     "image": "ghcr.io/project-zot/zot-linux-arm64@sha256:14006bb4ca46e1bc250f3fc227b850fe1f7a9f5a751869af684f3b65cdb2c713",
     "guest_port": 30500,
-    "host_port": 25000,
+    "host_port": 15000,
     "mirror": "registry.mesail.local",
     "pusher": "pusher"
   },
@@ -30,9 +30,5 @@
     "images": "/mnt/mesail-k3s",
     "data": "/mnt/mesail-data",
     "app_area": "/mnt/mesail-data/apps"
-  },
-  "api": {
-    "guest_port": 6443,
-    "host_port": 26443
   }
 }

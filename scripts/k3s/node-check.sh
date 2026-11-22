@@ -114,7 +114,6 @@ check_localhost_only() {
   echo "LoadBalancer or external-IP Services: ${services:-none}"
   guest sudo nft list chain inet mesail_service_cidr_guard input > /dev/null \
     && loopback_only "$(pin registry.host_port)" \
-    && loopback_only "$(pin api.host_port)" \
     && [ -z "$services" ]
 }
 

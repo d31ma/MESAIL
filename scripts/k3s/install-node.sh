@@ -4,8 +4,7 @@
 # supervisor starts it after the image disk is mounted and
 # /var/lib/rancher/k3s is bound onto it. Needs: the user's download yes, Platform's OK, the dev host
 # at 8 GiB with the image disk mounted at /mnt/mesail-k3s and the Lima
-# forward of guest 127.0.0.1:30500 -> 127.0.0.1:25000 (and the API, guest
-# 127.0.0.1:6443 -> 127.0.0.1:26443), and the files staged by
+# forward of guest 127.0.0.1:30500 -> 127.0.0.1:15000, and the files staged by
 # stage-node-files.sh. It never touches Floci's containers or volumes.
 # Usage: scripts/k3s/install-node.sh
 set -Eeuo pipefail
