@@ -3730,8 +3730,10 @@ roots, digests). Each Mesail workload: a Deployment, replicas 1,
 `Recreate`, a ClusterIP Service, terminationGracePeriodSeconds 30; each
 FYLO app a local volume `<data disk>/k3s/<app>.vol` mounted at
 `/mnt/data` (root `/mnt/data/<app>`); Keycloak's SQLite and the blobs on
-the data disk. Loopback ports on the Mac: Zot 15000 (the guest's NodePort
-30500); no K3s API forward (kubectl runs through `mesail-devhost exec`);
+the data disk. Loopback ports on the Mac: Zot 15000 (Zot is a ClusterIP
+Service; K41's `kubectl port-forward --address 127.0.0.1 service/zot
+30500:5000` unit puts it on the guest loopback 127.0.0.1:30500, which
+Lima forwards to the Mac; ADR 0014 section 7); no K3s API forward (kubectl runs through `mesail-devhost exec`);
 planned for the apps (a PaaS request with K43): the router 28080,
 Keycloak 28180, the SMTP edge 22525, which move back to Floci's 18080,
 18180 and 12525 at K45. In three steps, each with the blackbox suite: (1)
