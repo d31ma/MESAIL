@@ -32,22 +32,28 @@ is mounted and `/var/lib/rancher/k3s` is bound onto it. If K3s started at boot, 
 write to the VM's own disk; the next bind is then refused (the folder is not empty) and
 the whole dev host is blocked. `install-node.sh` stops when it finds the unit enabled.
 
-### Stopping K3s (the dev host supervisor's stop, and every hand-over)
+### Stopping and starting K3s
 
-K3s's unit has `KillMode=process`, so pods and their `containerd-shim-runc-v2` processes keep running after
-`systemctl stop k3s.service` and keep files open on the K3s disk. Stop in this order:
+The dev host supervisor's procedure is the one to use (staged at
+`~/.local/share/mesail-devhost-staged/k3sdisk-v2/PROCEDURE.md`). K3s's unit has `KillMode=process`, so pods and their
+`containerd-shim-runc-v2` processes keep running after `systemctl stop k3s.service`. Stop:
 
-1. `sudo k3s kubectl drain mesail --ignore-daemonsets --delete-emptydir-data --grace-period=35 --timeout=120s`
-   (each pod gets its own grace period; nothing restarts while the node is cordoned).
+1. `sudo k3s kubectl drain mesail --ignore-daemonsets --delete-emptydir-data --grace-period=-1 --timeout=150s`
+   (each pod gets its own grace period; the node stays cordoned), then wait up to 60 s until no container runs.
 2. `sudo systemctl stop zot-forward.service k3s.service`.
-3. Leftover `containerd-shim-runc-v2` processes of `/var/lib/rancher/k3s/data`: TERM, then KILL after 10 s, each pid logged.
+3. Leftover `containerd-shim-runc-v2` processes under `/var/lib/rancher/k3s/data`: TERM, then KILL, each pid logged.
 4. Unmount only the mounts below the three binds, deepest first.
-5. `fuser -vm /mnt/mesail-k3s`: if anything is open, log it and do not stop the VM; otherwise unmount the binds,
-   then the disk, then stop Docker and the VM.
+5. `fuser -vm /mnt/mesail-k3s`: if anything is open, the VM stop is refused and retried every 15 s; otherwise
+   unmount the binds, then the disk (normal unmounts, never lazy), then stop Docker and the VM.
 
-After each start: `sudo k3s kubectl uncordon mesail` (the supervisor does it; `install-node.sh` too).
-Never run `k3s-killall.sh` or `k3s-uninstall.sh`: they unmount and remove the bind itself. `install-node.sh` copies
-only the `k3s` binary, so they are not installed.
+Start: the binds are made only onto empty folders while K3s is stopped; `k3s.service` refuses to start without its
+mounts; the node stays cordoned until it is Ready, then `sudo k3s kubectl uncordon mesail` (the supervisor does it;
+`install-node.sh` too). Never run `k3s-killall.sh` or `k3s-uninstall.sh`: they unmount and remove the bind itself.
+`install-node.sh` copies only the `k3s` binary, so they are not installed.
+
+Workloads on this node: FYLO owners set `terminationGracePeriodSeconds: 40` (never over 120); no PodDisruptionBudget
+that can block a drain; no DaemonSets; volumes only on the data disk (local-path PVCs or static local PVs), never a
+`hostPath`.
 
 ## What the dev host session sets up first
 

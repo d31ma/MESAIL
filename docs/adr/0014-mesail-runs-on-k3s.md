@@ -102,8 +102,17 @@ Keycloak. No Lambda remains.
 - **One writer per root** (ADR 0004 section 4) holds as before. FYLO's
   lease is 20 s; fencing stops an old pod with `EROOTLEASELOST` before it
   commits. Each FYLO-owning pod closes FYLO cleanly on SIGTERM
-  (`TAC_SHUTDOWN_GRACE_SECONDS`) and has `terminationGracePeriodSeconds`
-  of 30 or more.
+  (`TAC_SHUTDOWN_GRACE_SECONDS`) and sets `terminationGracePeriodSeconds:
+  40` explicitly (never more than 120). FYLO needs about 30 s to close, and
+  the dev host's drain waits up to 150 s (section 8).
+- **What the cluster may not hold**, so a drain always finishes and nothing
+  lands on the VM's OS disk:
+  - no PodDisruptionBudget that can block an eviction (with one copy per
+    app, any `minAvailable: 1` PDB would stop the drain);
+  - no DaemonSets;
+  - volumes only on the data disk: local-path PVCs, or the static local
+    PVs that section 5 names (the FYLO areas and the blob folder); never a
+    `hostPath`, and nothing into the OS disk.
 - **Plain Deployments, not Knative.** Knative starts a new pod before the
   old one stops, and scale to zero reopens FYLO cold. Knative may come
   later for `identity` alone (no FYLO root), by a new decision.
@@ -253,7 +262,7 @@ The development node is never exposed to the internet or the LAN:
 | Node name | `paas-k3s-pilot` | `mesail` | the dev host's name |
 | Images and local volumes | K3s state and images in `/var/lib/rancher/k3s` on the VM's OS disk; local-path on the pilot's data disk on ATLAS | the dev host supervisor binds three folders onto a sparse K3s disk on HANGAR (made at 25 GiB, grown up to Platform's 30 GiB cap before it passes 85%; mounted by UUID at `/mnt/mesail-k3s`): `/var/lib/rancher/k3s` (state, images, containerd), `/var/lib/kubelet` (pod volume mounts) and `/var/log/pods` (container logs). They stay on the OS disk: `/var/log/containers` (only links into `/var/log/pods`), `/var/lib/cni` (tiny), `/etc/rancher` (configuration) and `/run/k3s` (memory only). Local-path and FYLO roots are on the existing data disk | the MESAIL BC's rule: nothing K3s writes may land on the VM's OS disk (already 63-76% full); development never uses ATLAS or HAVEN; HANGAR holds the VMs and virtual disks |
 | Start at boot | `k3s.service` enabled at boot | `k3s.service` installed but never enabled; the dev host supervisor starts it after the image disk is mounted and bound | a K3s started before the bind writes to the VM's OS disk, the bind is then refused (the folder is not empty) and the whole dev host is blocked |
-| Stopping K3s | `systemctl stop k3s.service`, or `k3s-killall.sh` | in this order (the dev host supervisor's stop, and every hand-over): (1) `k3s kubectl drain mesail --ignore-daemonsets --delete-emptydir-data --grace-period=35 --timeout=120s`; (2) `systemctl stop zot-forward.service k3s.service`; (3) send TERM, then KILL after 10 s, only to leftover `containerd-shim-runc-v2` processes of `/var/lib/rancher/k3s/data`, each pid logged; (4) unmount only the mounts below the three binds, deepest first; (5) if `fuser -vm /mnt/mesail-k3s` shows anything open, log it and do not stop the VM, otherwise unmount the binds, then the disk, then stop Docker and the VM. After each start, `k3s kubectl uncordon mesail`. `k3s-killall.sh` and `k3s-uninstall.sh` are never installed or run | K3s's unit has `KillMode=process`, so pods and shims outlive `systemctl stop`; on 2026-11-21 something wrote into `/var/lib/rancher/k3s` on the OS disk while the K3s disk was not mounted, and the next bind was refused. The drain stops pods with their own grace period (FYLO owners close cleanly) and nothing restarts; the killall script would unmount and remove the bind itself |
+| Stopping and starting K3s | `systemctl stop k3s.service`, or `k3s-killall.sh` | the dev host supervisor's procedure (staged at `~/.local/share/mesail-devhost-staged/k3sdisk-v2/PROCEDURE.md`), used for every VM stop and hand-over. Stop: (1) `kubectl drain mesail --ignore-daemonsets --delete-emptydir-data --grace-period=-1 --timeout=150s`, so each pod gets its own grace period and the node stays cordoned, then wait up to 60 s until no container runs; (2) stop `zot-forward.service` and `k3s.service`; (3) TERM, then KILL, only leftover `containerd-shim-runc-v2` processes under `/var/lib/rancher/k3s/data`; (4) unmount the mounts below the binds, deepest first; (5) if `fuser -vm /mnt/mesail-k3s` shows anything, refuse the VM stop and retry every 15 s; otherwise unmount the binds and the disk with normal (never lazy) unmounts, then stop Docker and the VM. Start: the three binds are made only onto empty folders while K3s is stopped; `k3s.service` refuses to start without its mounts; the node stays cordoned until it is Ready, then the supervisor (and `install-node.sh`) runs `kubectl uncordon mesail`; not Ready in 3 minutes means it stays cordoned. `k3s-killall.sh` and `k3s-uninstall.sh` are never installed or run | K3s's unit has `KillMode=process`, so pods and shims outlive `systemctl stop`; on 2026-11-21 something wrote into `/var/lib/rancher/k3s` on the OS disk while the K3s disk was not mounted, and the next bind was refused. The drain stops pods with their own grace period (FYLO owners close cleanly) and nothing restarts; the killall script would unmount and remove the bind itself |
 | Zot's store | its own 64 GiB disk on HAVEN | the HANGAR image disk | the same rule |
 | Zot retention | the 3 most recently pushed tags | the last 2 digests | HANGAR is small (about 29 GiB free on 2026-11-21) |
 | Mirror name | `registry.paas.local` | `registry.mesail.local` | Mesail's own images on this Mac; kestrel's manifests use kestrel's name (K46) |
