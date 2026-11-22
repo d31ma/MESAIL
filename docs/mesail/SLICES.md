@@ -3679,12 +3679,15 @@ kestrel) and ADR 0004 section 4's Lambda packaging. It keeps:
 ### K41. ADR 0014 and the K3s node in the dev host (4-6 hours)
 Brief: `k41-brief.md` in the MESAIL Build Coordinator's notes. ADR 0014;
 K3s v1.37.2+k3s1 in the `mesail` dev host from the airgap files copied
-from kestrel; Zot on its own HANGAR registry disk
-(`/Volumes/HANGAR/mesail/k3s/mesail-registry.raw`, 25 GiB), K3s's volumes
-on the data disk and its containerd images on the OS disk, as on kestrel's
-pilot; namespaces and policies;
+from kestrel; ONE sparse disk on HANGAR
+(`/Volumes/HANGAR/mesail/k3s/mesail-k3s-images.raw`, 30 GiB cap, mounted
+at `/mnt/mesail-k3s`) holds all of `/var/lib/rancher/k3s` (containerd
+images, K3s's data and volumes, Zot's store), nothing on the OS disk; the
+FYLO roots, Keycloak and the blobs stay on the data disk; K3s does not
+start at boot (the dev host's supervisor starts it after the disk is
+mounted); Zot; namespaces and policies;
 `scripts/k3s/node-check.sh` (a test image by digest, a FYLO root write and
-read with the subPath layout, the guest's memory, and the OS disk's use:
+read with the subPath layout, the guest's memory, and the K3s disk's use:
 over 85%, Platform is told). Done when ADR 0014 is
 on develop, the node check passes and Platform signs off.
 
