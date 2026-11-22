@@ -3623,6 +3623,33 @@ this slice moves Mesail to the new layout with DB-1.
   slices write only their own namespace; and `git grep` finds no
   `slice-<id>/<app>` path and no `FYLO_ALLOW_SYSTEM_DISK`.
 
+### K47. Mail between hosted domains arrives within one fast tick (about 1 hour, no dependency)
+Found by MSL-INT's dev host check (2026-11-22, run int-20261121-235631;
+the hub's note `msl-int-acdm6-timing.md`): `TestAcDm6EmailToAnotherHostedDomainIsDelivered`
+waits 60 s, but an email to another hosted domain needs two scheduled
+steps: `mail-out/jobs/deliver` in the fast group (30 s) and
+`mail-in/outbox/relay` in the normal group (60 s). The worst case is about
+90 s plus processing, so the test passes only when the ticks line up (it
+saw 84 s; another run 13.5 s). No code is wrong; the delay is
+user-visible.
+- **Change:** put `/api/v1/mail-in/outbox/relay` in the fast group in
+  `deploy/floci/stack.json` (`"fast": true`, as K27 did for mail-out and
+  notify). Mail in then waits at most one 30 s tick after the SMTP edge's
+  intake, the same as mail out. The fast group's extra cost is one more
+  call every 30 s, which answers at once when the outbox is empty.
+- **Test:** `TestAcDm6` waits 90 s (two fast ticks plus margin), not 60 s;
+  no other test changes. The K3s schedulers (K43) take their groups from
+  `stack.json`'s `schedules`, so the move carries over with no second
+  change.
+- **Not in this slice:** pushing to messaging right after intake (drain on
+  write in mail-in) would remove the wait entirely; it is a possible
+  later slice, only if users find 30 s too slow.
+- **Done when:** `stack.json` has the flag; the scheduler-fast container
+  calls `mail-in/outbox/relay` every 30 s (seen in its log); `TestAcDm6`
+  passes in 5 dev host runs in a row with a 90 s wait, and its logged time
+  from send to delivery is at most about 65 s; `gates.sh` for mail-in and
+  the K33 flow tests pass.
+
 ## Open before the production release
 Everything that must be done or decided before Mesail's first production
 release on kestrel, as one-line pointers; the details live in the slices
