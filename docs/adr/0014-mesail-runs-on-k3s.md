@@ -56,9 +56,16 @@ skopeo, Flux, kustomize, Deployments, FYLO roots) stay; only where the
 node's files live may move to PaaS.
 
 The owner added: "the develop branch is the same as the staging, but for
-local development (localhost) and NEVER exposed to the internet". So
-everything this node adds listens on the Mac's loopback only (section 7,
-"Reach").
+local development (localhost) and NEVER exposed to the internet". So:
+
+- **The branch rule.** PaaS gets a new `develop` branch, made from
+  `staging`, strictly for local development on this Mac. It is never
+  merged into `staging` or `production`, and nothing on it is deployed to
+  kestrel. The PaaS Build Coordinator owns the branch; Mesail never
+  changes PaaS itself.
+- **Localhost only** (section 7): the K3s API, Zot and every Service
+  answer only on loopback, and nothing has an ingress to a public address,
+  a Tailscale name or a public DNS name.
 
 Open (2026-11-21, MSL-K41): the PaaS repository has no `develop` branch
 yet, on GitHub or in any checkout on this Mac; its long-lived branches are
@@ -125,14 +132,16 @@ whose checksum differs stops the install.
   runs as Deployment `registry/zot`, set up as the pilot's
   `registry.json`: namespace pod-security `restricted`, user 10002,
   read-only root, no service-account token, one copy with Recreate,
-  NodePort 30500, dedupe, garbage collection (delay 1 h, every 24 h), a
+  a `ClusterIP` Service (kestrel: NodePort 30500), dedupe, garbage collection (delay 1 h, every 24 h), a
   daily scrub. Anyone in the cluster may pull; only the user `pusher` may
   push; nobody may delete. The push password is made once inside the
   cluster, kept in a Secret and a 0600 auth file outside the repository,
   and never printed.
-- **Reach:** Zot's NodePort 30500 is forwarded to the host's loopback
-  only, `127.0.0.1:15000` (the same port on this Mac and on kestrel).
-  Nothing on the LAN reaches it.
+- **Reach:** a `kubectl port-forward --address 127.0.0.1 service/zot
+  30500:5000` unit (the pilot's Headlamp pattern) puts Zot on the guest's
+  loopback, and Lima forwards that to the host's loopback only,
+  `127.0.0.1:15000` (the same host port as on kestrel). Nothing on the LAN
+  reaches it.
 - **Push:** `skopeo copy docker-daemon:<image> docker://127.0.0.1:<port>/mesail/<app>:<tag>`
   from the host, with the pusher's auth file.
 - **Pull:** `/etc/rancher/k3s/registries.yaml` sends
@@ -140,7 +149,7 @@ whose checksum differs stops the install.
   an image by digest (`registry.mesail.local/mesail/<app>@sha256:<digest>`),
   never by tag. A check fails on a manifest that names a tag (K42).
 - **Retention:** keep the last 2 pushed digests of each image; untagged
-  images go after a day (see section 7 for why 2, not kestrel's 3).
+  images go after a day (see section 8 for why 2, not kestrel's 3).
 - **Run time never downloads** (ADR 0007 section 3): the node pulls only
   from Zot inside the install.
 
@@ -193,7 +202,28 @@ disk (`ESYSTEMDISK`). So:
 - Native `ty start` runs (`scripts/native/run-all.sh`) stay the way every
   slice is tested.
 
-### 7. Where this Mac differs from kestrel, and why
+### 7. Localhost only on this Mac
+
+The development node is never exposed to the internet or the LAN:
+
+- **Services:** every Service is `ClusterIP`. No `NodePort`, no
+  `LoadBalancer`, no Ingress, no Tailscale, no public DNS name.
+- **The host:** the only ports on the Mac are Lima forwards to
+  `127.0.0.1` (Zot's 15000 and the existing Mesail ports). A Service the
+  Mac must reach gets a `kubectl port-forward --address 127.0.0.1` unit in
+  the guest and a Lima forward to `127.0.0.1`.
+- **The K3s API:** not forwarded to the Mac; reached only with
+  `mesail-devhost exec sudo k3s kubectl ...`. It is not bound to the
+  guest's loopback itself, because the pods (Flux, CoreDNS) reach it
+  through the node's address. Instead the guard
+  (`node/service-cidr-guard.nft`) rejects the API, kubelet, kube-proxy,
+  NodePort and flannel ports arriving on the VM's network interface
+  `eth0`, so they answer only inside the VM.
+- **The check:** `scripts/k3s/node-check.sh` fails when a Service is not
+  `ClusterIP`, when the Mac's port 15000 listens on anything but
+  `127.0.0.1`, or when the guard is missing.
+
+### 8. Where this Mac differs from kestrel, and why
 
 | Part | kestrel's pilot | This Mac | Why |
 | --- | --- | --- | --- |
@@ -204,7 +234,8 @@ disk (`ESYSTEMDISK`). So:
 | Zot's store | its own 64 GiB disk on HAVEN | the HANGAR image disk | the same rule |
 | Zot retention | the 3 most recently pushed tags | the last 2 digests | HANGAR is small (about 29 GiB free on 2026-11-21) |
 | Mirror name | `registry.paas.local` | `registry.mesail.local` | Mesail's own images; the `kestrel` overlay sets kestrel's name (K46) |
-| K3s API | forwarded to `127.0.0.1:16443` on kestrel | not forwarded; on the guest's loopback only, reached with `mesail-devhost exec kubectl ...` | other sessions on this Mac must not reach the cluster outside the dev host's lock |
+| K3s API | forwarded to `127.0.0.1:16443` on kestrel | not forwarded; answers only inside the VM (the guard rejects 6443 on `eth0`); reached with `mesail-devhost exec sudo k3s kubectl ...` | other sessions on this Mac must not reach the cluster outside the dev host's lock; localhost only (section 7) |
+| Zot Service | NodePort 30500, forwarded by Lima | `ClusterIP`, put on the guest loopback by a port-forward unit, forwarded by Lima to `127.0.0.1:15000` | no NodePort on the development node (section 7) |
 | Reach | the private front door and Tailscale serve chosen hosts (`lamp.del.ma`, `store.del.ma`) | nothing is served beyond this Mac: the only host ports are Lima forwards to `127.0.0.1` (Zot 15000 and the existing Mesail ports); the K3s API, kubelet and NodePorts stay inside the VM, whose Lima network the LAN cannot reach | the owner: the development platform is "for local development (localhost) and NEVER exposed to the internet" |
 | Flux source | the PaaS repository over SSH with a deploy key | the Mesail repository, branch named by the `dev` overlay | Mesail's manifests live in Mesail (K46 decides PaaS's pointer with Platform) |
 | Knative, Kourier, Headlamp | installed | not installed | Mesail uses plain Deployments (section 1); Headlamp may come later from the pilot's pin |

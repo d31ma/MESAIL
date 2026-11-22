@@ -96,6 +96,20 @@ check_fylo_root() {
   run_probe_job "$digest" read "$marker"
 }
 
+public_services() {
+  kubectl_guest get services --all-namespaces -o 'jsonpath={range .items[?(@.spec.type!="ClusterIP")]}{.metadata.namespace}/{.metadata.name} {.spec.type}{"\n"}{end}'
+}
+
+check_localhost_only() {
+  local services listeners
+  services=$(public_services)
+  listeners=$(lsof -nP -iTCP:"$(pin registry.host_port)" -sTCP:LISTEN | awk 'NR>1 {print $9}' | sort -u)
+  echo "Services that are not ClusterIP: ${services:-none}"
+  echo "Mac listeners on port $(pin registry.host_port): ${listeners:-none}"
+  guest sudo nft list chain inet mesail_service_cidr_guard input > /dev/null
+  [ -z "$services" ] && [ "$listeners" = "127.0.0.1:$(pin registry.host_port)" ]
+}
+
 check_flux() {
   kubectl_guest -n flux-system wait --for=condition=Available deployment/source-controller deployment/kustomize-controller --timeout=60s
   kubectl_guest -n flux-system get gitrepositories,kustomizations 2>&1 || true
@@ -142,6 +156,7 @@ run_checks() {
   eval "$(mesail-devhost env)"
   run_step node-ready check_node_ready
   run_step registry check_registry_answers
+  run_step localhost-only check_localhost_only
   step_start push
   digest=$(push_probe "$image")
   echo "pushed $image as $digest"

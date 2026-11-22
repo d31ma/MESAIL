@@ -4,7 +4,7 @@
 # supervisor starts it after the image disk is mounted and
 # /var/lib/rancher/k3s is bound onto it. Needs: the user's download yes, Platform's OK, the dev host
 # at 8 GiB with the image disk mounted at /mnt/mesail-k3s and the Lima
-# forward 30500 -> 127.0.0.1:15000, and the files staged by
+# forward of guest 127.0.0.1:30500 -> 127.0.0.1:15000, and the files staged by
 # stage-node-files.sh. It never touches Floci's containers or volumes.
 # Usage: scripts/k3s/install-node.sh
 set -euo pipefail
@@ -66,6 +66,7 @@ install_units() {
   put_file "$node/service-cidr-guard.nft" /etc/mesail-service-cidr-guard.nft 0644
   put_file "$node/service-cidr-guard.service" /etc/systemd/system/mesail-service-cidr-guard.service 0644
   put_file "$node/k3s.service" /etc/systemd/system/k3s.service 0644
+  put_file "$node/zot-forward.service" /etc/systemd/system/zot-forward.service 0644
   guest sudo systemctl daemon-reload
   guest sudo systemctl enable --now mesail-service-cidr-guard.service
   guest mountpoint -q /var/lib/rancher/k3s
@@ -126,6 +127,8 @@ install_registry() {
   write_auth_file
   guest sudo k3s kubectl apply -f - < "$(install_root)/deploy/k3s/registry/zot.yaml"
   guest sudo k3s kubectl -n registry rollout status deployment/zot --timeout=300s
+  guest sudo systemctl enable zot-forward.service
+  guest sudo systemctl restart zot-forward.service
 }
 
 install_flux() {

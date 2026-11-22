@@ -10,9 +10,10 @@ The decision and every difference from kestrel are in
 | --- | --- |
 | `node/pins.json` | the pinned versions, SHA-256s and image digests (from the pilot's `deployment.json`) |
 | `node/config.yaml` | `/etc/rancher/k3s/config.yaml`: the pilot's settings, node name `mesail` |
-| `node/registries.yaml` | `registry.mesail.local` -> Zot's NodePort inside the node |
+| `node/registries.yaml` | `registry.mesail.local` -> Zot on the guest loopback (`127.0.0.1:30500`) |
+| `node/zot-forward.service` | `kubectl port-forward --address 127.0.0.1 service/zot 30500:5000`, as the pilot's Headlamp forward |
 | `node/k3s.service` | the pilot's unit, with a mount check for each disk; installed but never enabled at boot |
-| `node/service-cidr-guard.*` | the pilot's nftables guard for `10.43.0.0/16` |
+| `node/service-cidr-guard.*` | the pilot's nftables guard for `10.43.0.0/16`, plus an input rule that rejects the K3s ports (API 6443, kubelet, kube-proxy, NodePorts, flannel) arriving on the VM's network interface `eth0` |
 | `registry/` | Zot as the pilot's `registry.json`, keeping the last 2 digests per image |
 | `node-check/` | the FYLO probe: a pod mounts `apps/nodecheck.vol` by subPath at `/mnt/data` and writes and reads the root `/mnt/data/nodecheck` |
 
@@ -35,7 +36,7 @@ the whole dev host is blocked. `install-node.sh` stops when it finds the unit en
 
 - The dev host's memory from 6 to 8 GiB.
 - The image disk, mounted at `/mnt/mesail-k3s` by UUID, with the supervisor's guards and the bind of `/var/lib/rancher/k3s` (staged in `~/.local/share/mesail-devhost-staged/k3sdisk/APPLY.md`).
-- A Lima forward: guest port 30500 -> `127.0.0.1:15000` on the Mac (the same host port as on kestrel).
+- A Lima forward: guest `127.0.0.1:30500` -> `127.0.0.1:15000` on the Mac (the same host port as on kestrel).
 
 ## Order
 
@@ -43,6 +44,12 @@ the whole dev host is blocked. `install-node.sh` stops when it finds the unit en
 2. `scripts/k3s/install-node.sh`: installs K3s, Zot and Flux in the running dev host.
 3. `scripts/k3s/node-check.sh --probe-image <image with fylo>`: K3s ready, Zot answers, a test image pushed with skopeo and pulled by digest, the FYLO root probe, Flux, and memory and disk numbers.
 
-Everything listens on the Mac's loopback only: the one new host port is Zot's `127.0.0.1:15000`. Nothing is exposed to the LAN or the internet.
+## Localhost only (the owner's rule for PaaS `develop`)
+
+This node is for local development on this Mac and is NEVER exposed to the internet:
+- Every Service is `ClusterIP`. No `NodePort`, no `LoadBalancer`, no Ingress to a public address, no Tailscale, no public DNS name.
+- Zot reaches the Mac only through a port-forward on the guest's loopback and the Lima forward to `127.0.0.1:15000`.
+- The K3s API and the other K3s ports answer only inside the VM (loopback and pods); the guard rejects them on `eth0`. The API is not forwarded to the Mac.
+- `node-check.sh` fails when a Service is not `ClusterIP`, when port 15000 listens on anything but `127.0.0.1`, or when the guard is missing.
 
 Use the cluster only through `mesail-devhost exec sudo k3s kubectl ...`. The K3s API is not forwarded to the Mac.

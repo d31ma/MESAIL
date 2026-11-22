@@ -3,4 +3,5 @@ delete table inet mesail_service_cidr_guard
 table inet mesail_service_cidr_guard {
   chain forward { type filter hook forward priority 10; oifname "eth0" ip daddr 10.43.0.0/16 reject; }
   chain output { type filter hook output priority 10; oifname "eth0" ip daddr 10.43.0.0/16 reject; }
+  chain input { type filter hook input priority 10; iifname "eth0" tcp dport { 6443, 10249, 10250, 10256, 10257, 10259, 30000-32767 } reject; iifname "eth0" udp dport { 8472, 30000-32767 } reject; }
 }
