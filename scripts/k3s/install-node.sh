@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Installs the Mesail K3s node in the running dev host, as kestrel's pilot
-# (ADR 0014). Needs: the user's download yes, Platform's OK, the dev host
+# (ADR 0014). It never enables k3s.service at boot: the dev host
+# supervisor starts it after the image disk is mounted and
+# /var/lib/rancher/k3s is bound onto it. Needs: the user's download yes, Platform's OK, the dev host
 # at 8 GiB with the image disk mounted at /mnt/mesail-k3s and the Lima
 # forward 30500 -> 127.0.0.1:15000, and the files staged by
 # stage-node-files.sh. It never touches Floci's containers or volumes.
@@ -52,7 +54,7 @@ guest_sha_matches() {
 }
 
 prepare_folders() {
-  guest sudo install -d -m 0755 /mnt/mesail-k3s/rancher /mnt/mesail-k3s/local-path
+  guest sudo install -d -m 0755 /mnt/mesail-data/local-path
   guest sudo install -d -m 0750 -o 10002 -g 10002 /mnt/mesail-k3s/registry
   guest sudo install -d -m 0755 "$(pin disks.app_area)"
   guest sudo install -d -m 0750 -o 10001 -g 10001 "$(pin disks.app_area)/nodecheck.vol"
@@ -61,13 +63,12 @@ prepare_folders() {
 install_units() {
   local node
   node="$(install_root)/deploy/k3s/node"
-  put_file "$node/var-lib-rancher.mount" /etc/systemd/system/var-lib-rancher.mount 0644
   put_file "$node/service-cidr-guard.nft" /etc/mesail-service-cidr-guard.nft 0644
   put_file "$node/service-cidr-guard.service" /etc/systemd/system/mesail-service-cidr-guard.service 0644
   put_file "$node/k3s.service" /etc/systemd/system/k3s.service 0644
   guest sudo systemctl daemon-reload
-  guest sudo systemctl enable --now var-lib-rancher.mount mesail-service-cidr-guard.service
-  guest mountpoint -q /var/lib/rancher
+  guest sudo systemctl enable --now mesail-service-cidr-guard.service
+  guest mountpoint -q /var/lib/rancher/k3s
 }
 
 install_k3s_files() {
@@ -83,8 +84,13 @@ install_k3s_files() {
   guest sudo ln -sfn /usr/local/bin/k3s /usr/local/bin/kubectl
 }
 
+k3s_not_enabled() {
+  [ "$(guest systemctl is-enabled k3s.service 2>/dev/null || true)" != enabled ]
+}
+
 start_k3s() {
-  guest sudo systemctl enable --now k3s.service
+  k3s_not_enabled || { echo "install-node: k3s.service is enabled at boot; the dev host supervisor must start it" >&2; return 1; }
+  guest sudo systemctl start k3s.service
   guest sudo k3s kubectl wait --for=condition=Ready "node/$(pin node_name)" --timeout=300s
 }
 

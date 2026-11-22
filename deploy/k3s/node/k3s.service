@@ -1,13 +1,12 @@
 [Unit]
 Description=K3s server for Mesail (MESAIL deploy/k3s/node, as d31ma/PaaS apps/k3s-pilot)
 Wants=network-online.target
-After=network-online.target var-lib-rancher.mount
-Requires=var-lib-rancher.mount
+After=network-online.target
 
 [Service]
 Type=notify
 ExecStartPre=/usr/bin/mountpoint -q /mnt/mesail-k3s
-ExecStartPre=/usr/bin/mountpoint -q /var/lib/rancher
+ExecStartPre=/usr/bin/mountpoint -q /var/lib/rancher/k3s
 ExecStartPre=/usr/bin/mountpoint -q /mnt/mesail-data
 ExecStart=/usr/local/bin/k3s server
 KillMode=process

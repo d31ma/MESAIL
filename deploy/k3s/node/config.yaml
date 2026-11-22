@@ -6,4 +6,4 @@ disable:
   - servicelb
 tls-san:
   - 127.0.0.1
-default-local-storage-path: /mnt/mesail-k3s/local-path
+default-local-storage-path: /mnt/mesail-data/local-path

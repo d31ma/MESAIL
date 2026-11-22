@@ -43,6 +43,24 @@ the Lambda form: one long-running process per FYLO root already gives
 one writer per root, and `realtime` already runs as a long-running
 process.
 
+## Direction added 2026-11-21: PaaS's `develop` branch as the development platform
+
+The owner, quoted through the hub: "that `develop` branch in `PaaS` repo is
+looking real nice about now. we could use it for develop branches these
+projects" and "use it stictly for development, it does not merge to
+staging". So the K3s node on this Mac is meant to come from PaaS's
+`develop` branch (its k3s-pilot node setup, Zot, Flux and kustomize files),
+used only for development and never merged into PaaS `staging`, rather
+than from a separate Mesail-only setup. The decisions below (K3s, Zot,
+skopeo, Flux, kustomize, Deployments, FYLO roots) stay; only where the
+node's files live may move to PaaS.
+
+Open (2026-11-21, MSL-K41): the PaaS repository has no `develop` branch
+yet, on GitHub or in any checkout on this Mac; its long-lived branches are
+`production` and `staging`. Until the PaaS owner creates `develop` and the
+updated plan names what moves there, `deploy/k3s/` in Mesail holds the
+node files, copied from the pilot on `production` at `925e679a`.
+
 ## Decision
 
 ### 1. Every Mesail part runs on K3s, on this Mac and on kestrel
@@ -174,7 +192,8 @@ disk (`ESYSTEMDISK`). So:
 | --- | --- | --- | --- |
 | VM | its own Lima VM `paas-k3s-pilot`, 4 vCPU, 4 GiB | the existing `mesail` dev host (Lima, vz), 6 vCPU, 8 GiB | a third VM breaks the Mac's 2-VM cap; the dev host already has the `--vm=mesail` lock (Platform's choice) |
 | Node name | `paas-k3s-pilot` | `mesail` | the dev host's name |
-| Images and local volumes | K3s state and images on the VM's OS disk; local-path on the pilot's data disk on ATLAS | a new sparse image disk on HANGAR, 25 GiB cap, mounted by UUID at `/mnt/mesail-k3s`; `/var/lib/rancher` is bound onto it | development never uses ATLAS or HAVEN; the dev host's OS disk is already 76% full; HANGAR holds the VMs and virtual disks |
+| Images and local volumes | K3s state and images in `/var/lib/rancher/k3s` on the VM's OS disk; local-path on the pilot's data disk on ATLAS | `/var/lib/rancher/k3s` bound by the dev host supervisor onto a new sparse image disk on HANGAR (25 GiB cap, mounted by UUID at `/mnt/mesail-k3s`); local-path and FYLO roots on the existing data disk | development never uses ATLAS or HAVEN; the dev host's OS disk is already 76% full; HANGAR holds the VMs and virtual disks |
+| Start at boot | `k3s.service` enabled at boot | `k3s.service` installed but never enabled; the dev host supervisor starts it after the image disk is mounted and bound | a K3s started before the bind writes to the VM's OS disk, the bind is then refused (the folder is not empty) and the whole dev host is blocked |
 | Zot's store | its own 64 GiB disk on HAVEN | the HANGAR image disk | the same rule |
 | Zot retention | the 3 most recently pushed tags | the last 2 digests | HANGAR is small (about 29 GiB free on 2026-11-21) |
 | Mirror name | `registry.paas.local` | `registry.mesail.local` | Mesail's own images; the `kestrel` overlay sets kestrel's name (K46) |
