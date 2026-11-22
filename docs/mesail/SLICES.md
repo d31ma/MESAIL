@@ -3374,6 +3374,13 @@ from running workers at all.
   `WorkerSwitch` or `kit/scheduling`; `scripts/gates.sh --all` passes.
 
 ### K36. mail-in refuses a hand-off to an unknown mailbox (release blocker, about 2-3 hours)
+**Done** (develop 3d83a264): mail-in answers `404` MS2515 for an unknown
+hand-off recipient (nothing stored) and `400` MS2516 for more than one
+recipient; a directory `404` with another code answers `503` MS2514
+(CONTRACTS.md, ERRORS.md). The same branch fixed K34's mail-out relay
+settings (TY2010): the relay keys are out of mail-out's `application.json`,
+and `relayrequiretls` is true when absent. Floci proof on 3d83a264: 4 pass,
+1 skipped by design, 0 fail, K34's two relay tests included.
 Found by MSL-K33 (2026-11-21, `k33-bug-handoff-unknown-mailbox.md` in the
 MESAIL Build Coordinator's notes). An email to an unknown mailbox in
 another hosted, active domain goes out through mail-out's internal
@@ -3643,12 +3650,13 @@ Release blockers:
 - **Write speed on ATLAS:** OPERATIONS.md section 7.6's measurement; K38
   (one FYLO transaction per collection per action) becomes a blocker if
   reads wait too long; a slow plain send needs FYLO's cost per commit.
-- **K36:** a hand-off to an unknown mailbox in another hosted domain is
-  reported `bounced`, not `sent` (found by K33).
+- **K36:** done (develop 3d83a264): a hand-off to an unknown mailbox in
+  another hosted domain is reported `bounced`, not `sent`.
 - **K34:** done (develop 9f5f6bb4): mail out to an outside address is
   proven against the test stack's SMTP sink.
-- **K33:** done (develop 38d93ef5): 32 of 33 flow tests pass; the last
-  one waits for K36.
+- **K33:** done (develop 38d93ef5): 32 of 33 flow tests passed; the
+  last one waited for K36, now merged (3d83a264). The next full Floci run
+  confirms all 33.
 - **Dependencies tested on their `develop` (the release rule):** Mesail
   tests each dependency's `develop` build before that dependency's release,
   then moves to the release:
