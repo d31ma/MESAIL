@@ -3679,9 +3679,13 @@ kestrel) and ADR 0004 section 4's Lambda packaging. It keeps:
 ### K41. ADR 0014 and the K3s node in the dev host (4-6 hours)
 Brief: `k41-brief.md` in the MESAIL Build Coordinator's notes. ADR 0014;
 K3s v1.37.2+k3s1 in the `mesail` dev host from the airgap files copied
-from kestrel; Zot on the new HANGAR image disk; namespaces and policies;
+from kestrel; Zot on its own HANGAR registry disk
+(`/Volumes/HANGAR/mesail/k3s/mesail-registry.raw`, 25 GiB), K3s's volumes
+on the data disk and its containerd images on the OS disk, as on kestrel's
+pilot; namespaces and policies;
 `scripts/k3s/node-check.sh` (a test image by digest, a FYLO root write and
-read with the subPath layout, the guest's memory). Done when ADR 0014 is
+read with the subPath layout, the guest's memory, and the OS disk's use:
+over 85%, Platform is told). Done when ADR 0014 is
 on develop, the node check passes and Platform signs off.
 
 ### K42. Images to Zot (3-4 hours, after K41)
@@ -3695,8 +3699,11 @@ image is in Zot by digest.
 `deploy/k3s/base` (Deployments, Services, volumes, network policies,
 the router in proxy mode, the schedulers, Keycloak with SQLite on a local
 volume, the SMTP edge) and `overlays/dev` (the relay sink, test keys and
-people); `scripts/k3s/{up,deploy,test,down}.sh`; Flux from `develop` once
-the user confirms the read-only GitHub deploy key. In three steps, each
+people); `scripts/k3s/{up,deploy,test,down}.sh`; Flux from `develop` with
+ONE read-only GitHub deploy key on `d31ma/MESAIL` (approved: "Yes,
+read-only key (Rec.)"; the private key only as a Flux secret in the
+cluster, never printed, logged or committed; the session reports the
+key's title and fingerprint). In three steps, each
 with the blackbox suite: (1) Keycloak, identity, the router and the web
 apps; (2) directory, the first FYLO owner; (3) all the rest. Done when the
 whole blackbox suite (K33's flows included) passes on K3s.
