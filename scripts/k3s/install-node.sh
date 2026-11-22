@@ -6,7 +6,7 @@
 # at 8 GiB with the image disk mounted at /mnt/mesail-k3s and the Lima
 # forward of guest 127.0.0.1:30500 -> 127.0.0.1:15000, and the files staged by
 # stage-node-files.sh. It never touches Floci's containers or volumes.
-# Usage: scripts/k3s/install-node.sh
+# Usage: scripts/k3s/install-node.sh [function ...]   (no argument: every step)
 set -Eeuo pipefail
 trap 'echo "=== step failed rc=$? at line $LINENO $(date +%H:%M:%S)"' ERR
 
@@ -72,17 +72,21 @@ install_units() {
   guest mountpoint -q /var/lib/rancher/k3s
 }
 
-install_k3s_files() {
-  local node stage
+install_k3s_binary() {
+  local node
   node="$(install_root)/deploy/k3s/node"
-  stage="$(stage_dir)"
-  put_file "$stage/k3s-arm64" /usr/local/bin/k3s 0755
+  put_file "$(stage_dir)/k3s-arm64" /usr/local/bin/k3s 0755
   guest_sha_matches /usr/local/bin/k3s "$(pin 'k3s.files.k3s-arm64')"
-  put_file "$stage/k3s-airgap-images-arm64.tar.zst" /var/lib/rancher/k3s/agent/images/k3s-airgap-images-arm64.tar.zst 0644
-  guest_sha_matches /var/lib/rancher/k3s/agent/images/k3s-airgap-images-arm64.tar.zst "$(pin 'k3s.files.k3s-airgap-images-arm64.tar.zst')"
   put_file "$node/config.yaml" /etc/rancher/k3s/config.yaml 0600
   put_file "$node/registries.yaml" /etc/rancher/k3s/registries.yaml 0644
   guest sudo ln -sfn /usr/local/bin/k3s /usr/local/bin/kubectl
+}
+
+install_airgap_images() {
+  local target=/var/lib/rancher/k3s/agent/images/k3s-airgap-images-arm64.tar.zst
+  guest mountpoint -q /var/lib/rancher/k3s
+  put_file "$(stage_dir)/k3s-airgap-images-arm64.tar.zst" "$target" 0644
+  guest_sha_matches "$target" "$(pin 'k3s.files.k3s-airgap-images-arm64.tar.zst')"
 }
 
 k3s_not_enabled() {
@@ -140,15 +144,31 @@ install_flux() {
   guest sudo k3s kubectl -n flux-system wait --for=condition=Available deployment/source-controller deployment/kustomize-controller --timeout=300s
 }
 
-main() {
+run_all() {
   step mounts require_mounts
   step folders prepare_folders
   step units install_units
-  step k3s-files install_k3s_files
+  step k3s-binary install_k3s_binary
+  step airgap-images install_airgap_images
   step k3s-start start_k3s
   step registry install_registry
   step flux install_flux
   echo "install-node: done; run scripts/k3s/node-check.sh"
+}
+
+run_named() {
+  local name
+  for name in "$@"; do
+    step "$name" "$name"
+  done
+}
+
+main() {
+  if [ "$#" -eq 0 ]; then
+    run_all
+    return
+  fi
+  run_named "$@"
 }
 
 main "$@"
