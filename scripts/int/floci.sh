@@ -46,7 +46,7 @@ stack_profile() {
 
 save_logs() {
   local container
-  for container in $(docker ps --all --filter network=mesail_floci_backend --format '{{.Names}}'); do
+  for container in $(docker ps --all --filter network=mesail_floci_backend --format '{{.Names}}' | grep -v -x 'mesail-floci-floci-1'); do
     docker logs --timestamps "$container" > "$(mesail_log_dir)/container-$container.log" 2>&1 || true
   done
   echo "saved the logs of the function containers"
@@ -56,10 +56,7 @@ stop_stack() {
   local code="$1"
   if kept_stack "$code"; then echo "the stack is left running (MESAIL_INT_KEEP_STACK=1, run passed); its next user stops it"; return 0; fi
   if [ ! -f "$(mesail_log_dir)/compose-profile" ]; then echo "the stack was not started"; return 0; fi
-  MESAIL_BLOBS_VOLUME="$(cat "$(mesail_log_dir)/blobs-volume" 2> /dev/null || true)"
-  export MESAIL_BLOBS_VOLUME
-  # shellcheck disable=SC2046
-  docker compose --project-directory "$(mesail_root)" $(stack_profile) stop
+  docker compose -p mesail stop
 }
 
 kept_stack() {
