@@ -99,5 +99,6 @@ disk 2.4 of 25 GiB (10%), HANGAR 38 GiB free. Floci stayed healthy.
 | `paas-pusher` | `paas-develop/**` only (PaaS `develop`) | Secret `registry/paas-pusher` |
 
 Passwords are made once inside the cluster and never printed, logged or committed. To push, read the
-password from its Secret into a 0600 auth file and delete the file after use. `install-node.sh install_paas_pusher`
+password from its Secret and give it to skopeo through a pipe (`--dest-authfile <(...)`); never keep
+`paas-pusher`'s password in a file on the Mac. `install-node.sh install_paas_pusher`
 adds `paas-pusher`; `scripts/k3s/zot-scope-check.sh` proves each user's scope (it pushes the probe image).
