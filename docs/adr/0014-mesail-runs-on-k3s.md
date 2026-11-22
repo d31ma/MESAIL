@@ -13,8 +13,8 @@
   part of ADR 0004 and ADR 0007 stays, including the on-premise rules,
   the FYLO layout and one writer per FYLO root.
 - Slices: MSL-K41 (this ADR and the dev node), K42 (images to Zot), K43
-  (manifests and the `dev` overlay), K44 (MSL-INT on K3s), K45 (switch-over
-  and Floci retirement on the dev host), K46 (the `kestrel` overlay).
+  (Mesail's manifests in PaaS `develop`), K44 (MSL-INT on K3s), K45 (switch-over
+  and Floci retirement on the dev host), K46 (kestrel's manifests, with PaaS).
 - Sources: PaaS `apps/k3s-pilot` (kestrel's K3s pilot, read at commit
   `925e679a`: `deployment.json`, `registry.json`, `flux.json`,
   `guest_pilot.py`, `README.md`); FYLO ADR 0033 section 5.1 (a root's
@@ -67,13 +67,23 @@ local development (localhost) and NEVER exposed to the internet". So:
   answer only on loopback, and nothing has an ingress to a public address,
   a Tailscale name or a public DNS name.
 
-Open (2026-11-21, MSL-K41): the PaaS repository has no `develop` branch
-yet, on GitHub or in any checkout on this Mac; its long-lived branches are
-`production` and `staging`. A PaaS Build Coordinator will create `develop`
-from `staging`. Until then, `deploy/k3s/` in Mesail holds the node files,
-copied from the pilot at `925e679a`; `apps/k3s-pilot` on `staging`
-(`6e6aa3b3d`) is the same (its newer commits change only runbooks, the
-README and a snippet test).
+**The split** (agreed 2026-11-21 by the MESAIL and PAAS Build
+Coordinators; PaaS plan `paas-develop-plan.md`):
+
+- **Mesail's repository holds the node layer only:** K3s
+  `v1.37.2+k3s1` in the `mesail` dev host, `registries.yaml`, the use of
+  the image disk, Zot, the guard, the localhost rules and the node check
+  (`deploy/k3s/`, `scripts/k3s/`), copied from the pilot at `925e679a`
+  (`apps/k3s-pilot` on PaaS `staging`, `6e6aa3b3d`, is the same). It also
+  keeps the image builds.
+- **PaaS `develop` holds what Flux deploys:** Flux reads PaaS `develop`,
+  path `clusters/mesail-dev/develop`, with PaaS's own read-only deploy key
+  (PaaS slices PAAS-2 and PAAS-3, with the owner's yes). Mesail's app
+  manifests for this Mac live there, in
+  `clusters/mesail-dev/develop/mesail/`. Mesail's repository writes no app
+  manifests, no GitRepository for `d31ma/MESAIL` and no deploy key.
+- PaaS `develop` did not exist when this was written; the PAAS Build
+  Coordinator creates it from `staging`.
 
 ## Decision
 
@@ -105,8 +115,8 @@ Keycloak. No Lambda remains.
   SQLite file on a local volume on the node's own disk, never on NFS
   (OPERATIONS.md section 7).
 - **Test-only parts** (the relay sink, test DKIM keys, test people) live
-  only in the kustomize `dev` overlay. The `kestrel` overlay never names
-  them.
+  only in PaaS `develop`'s Mesail folder (section 4). Kestrel's manifests
+  never name them.
 
 ### 2. The node: K3s as on kestrel's pilot
 
@@ -155,9 +165,11 @@ whose checksum differs stops the install.
 
 ### 4. Deploys: kustomize overlays applied by Flux
 
-- **Manifests:** plain Kubernetes YAML with kustomize, in
-  `deploy/k3s/base/` plus overlays `dev` (this Mac) and `kestrel`
-  (production). No Helm.
+- **Manifests:** plain Kubernetes YAML with kustomize. No Helm. For
+  this Mac they live in PaaS `develop`, `clusters/mesail-dev/develop/mesail/`
+  (the split above). For kestrel they live where PaaS keeps kestrel's
+  workloads (`clusters/kestrel-pilot/<staging|production>`), decided in
+  K46 with PaaS.
 - **Flux `v2.10.0`**, as the pilot: only the source and kustomize
   controllers, from the pinned `flux-install.yaml` (SHA-256
   `a8c838ccd9be5d30eba9df87cd229b7c4eb80c0049fba1bc3b9840829f267f28`)
@@ -166,9 +178,11 @@ whose checksum differs stops the install.
   `ghcr.io/fluxcd/kustomize-controller@sha256:37db29b25dae35b881a5e064acedb0cc954442da453a39eaa0eab7a90dbecc4e`). Each workload namespace has a
   least-privilege deployer service account. A merge into the deploy
   branch is the deploy.
-- `kubectl apply -k` is allowed only for the node check, and on this Mac
-  for testing a branch before it is merged (the `scripts/k3s/` test
-  scripts, K43). Everything else goes through Flux.
+- **Flux's source** on this Mac is PaaS `develop`, set up by PaaS (PAAS-3),
+  not by Mesail. The node layer installs Flux's controllers with no source
+  at all.
+- `kubectl apply` by hand is allowed only for the node layer (Zot) and the
+  node check. Everything else goes through Flux.
 
 ### 5. FYLO roots: one mount per app, the root one folder below it
 
@@ -206,22 +220,28 @@ disk (`ESYSTEMDISK`). So:
 
 The development node is never exposed to the internet or the LAN:
 
-- **Services:** every Service is `ClusterIP`. No `NodePort`, no
-  `LoadBalancer`, no Ingress, no Tailscale, no public DNS name.
-- **The host:** the only ports on the Mac are Lima forwards to
-  `127.0.0.1` (Zot's 15000 and the existing Mesail ports). A Service the
-  Mac must reach gets a `kubectl port-forward --address 127.0.0.1` unit in
-  the guest and a Lima forward to `127.0.0.1`.
-- **The K3s API:** not forwarded to the Mac; reached only with
-  `mesail-devhost exec sudo k3s kubectl ...`. It is not bound to the
-  guest's loopback itself, because the pods (Flux, CoreDNS) reach it
-  through the node's address. Instead the guard
-  (`node/service-cidr-guard.nft`) rejects the API, kubelet, kube-proxy,
-  NodePort and flannel ports arriving on the VM's network interface
-  `eth0`, so they answer only inside the VM.
-- **The check:** `scripts/k3s/node-check.sh` fails when a Service is not
-  `ClusterIP`, when the Mac's port 15000 listens on anything but
-  `127.0.0.1`, or when the guard is missing.
+- **The Mac:** every port on the Mac is a Lima forward with
+  `hostIP: 127.0.0.1` (Zot's 15000 and the existing Mesail ports). The dev
+  host has no shared or bridged network. PaaS's
+  `tools/check_localhost_only.py --live` checks this.
+- **Services:** no `LoadBalancer`, no external IPs, no `hostPort` on a
+  non-loopback address, no Ingress to a public address, no Tailscale and
+  no public DNS name (host names are `*.localhost`). A `NodePort` is
+  allowed only because the guard keeps it inside the VM, and the Mac
+  reaches it only through a `hostIP: 127.0.0.1` forward. The node layer's
+  own Service (Zot) is `ClusterIP`, reached through a
+  `kubectl port-forward --address 127.0.0.1` unit in the guest.
+- **The K3s API:** the node layer does not forward it to the Mac; it is
+  reached with `mesail-devhost exec sudo k3s kubectl ...`. Any later
+  forward (for PaaS's tools) uses `hostIP: 127.0.0.1` and a port that does
+  not clash with kestrel's. It is not bound to the guest's loopback,
+  because the pods (Flux, CoreDNS) reach it through the node's address.
+  Instead the guard (`node/service-cidr-guard.nft`) rejects the API,
+  kubelet, kube-proxy, NodePort and flannel ports arriving on the VM's
+  network interface `eth0`, so they answer only inside the VM.
+- **The check:** `scripts/k3s/node-check.sh` fails when a Service is a
+  `LoadBalancer` or has external IPs, when the Mac's port 15000 listens on
+  anything but `127.0.0.1`, or when the guard is missing.
 
 ### 8. Where this Mac differs from kestrel, and why
 
@@ -233,11 +253,11 @@ The development node is never exposed to the internet or the LAN:
 | Start at boot | `k3s.service` enabled at boot | `k3s.service` installed but never enabled; the dev host supervisor starts it after the image disk is mounted and bound | a K3s started before the bind writes to the VM's OS disk, the bind is then refused (the folder is not empty) and the whole dev host is blocked |
 | Zot's store | its own 64 GiB disk on HAVEN | the HANGAR image disk | the same rule |
 | Zot retention | the 3 most recently pushed tags | the last 2 digests | HANGAR is small (about 29 GiB free on 2026-11-21) |
-| Mirror name | `registry.paas.local` | `registry.mesail.local` | Mesail's own images; the `kestrel` overlay sets kestrel's name (K46) |
+| Mirror name | `registry.paas.local` | `registry.mesail.local` | Mesail's own images on this Mac; kestrel's manifests use kestrel's name (K46) |
 | K3s API | forwarded to `127.0.0.1:16443` on kestrel | not forwarded; answers only inside the VM (the guard rejects 6443 on `eth0`); reached with `mesail-devhost exec sudo k3s kubectl ...` | other sessions on this Mac must not reach the cluster outside the dev host's lock; localhost only (section 7) |
-| Zot Service | NodePort 30500, forwarded by Lima | `ClusterIP`, put on the guest loopback by a port-forward unit, forwarded by Lima to `127.0.0.1:15000` | no NodePort on the development node (section 7) |
+| Zot Service | NodePort 30500, forwarded by Lima | `ClusterIP`, put on the guest loopback by a port-forward unit, forwarded by Lima to `127.0.0.1:15000` | the node layer opens no NodePort of its own (section 7) |
 | Reach | the private front door and Tailscale serve chosen hosts (`lamp.del.ma`, `store.del.ma`) | nothing is served beyond this Mac: the only host ports are Lima forwards to `127.0.0.1` (Zot 15000 and the existing Mesail ports); the K3s API, kubelet and NodePorts stay inside the VM, whose Lima network the LAN cannot reach | the owner: the development platform is "for local development (localhost) and NEVER exposed to the internet" |
-| Flux source | the PaaS repository over SSH with a deploy key titled `kestrel-k3s-pilot-flux` | the Mesail repository over SSH with its own read-only deploy key titled `mesail-k3s-falcos-mini-2 flux read-only` (never a pilot title, never made by PaaS's deploy-key script, which deletes keys by title); branch named by the `dev` overlay | Mesail's manifests live in Mesail (K46 decides PaaS's pointer with Platform) |
+| Flux source | the PaaS repository (`staging`, `production`) over SSH with PaaS's deploy key | PaaS `develop`, path `clusters/mesail-dev/develop`, over SSH with PaaS's own read-only develop key (made by PaaS, never by Mesail; never a kestrel pilot title) | PaaS `develop` is the development copy of `staging` (the split, above) |
 | Knative, Kourier, Headlamp | installed | not installed | Mesail uses plain Deployments (section 1); Headlamp may come later from the pilot's pin |
 | Floci | none | keeps running beside K3s until K45 | today's blackbox suite stays green until K3s passes the same suite |
 | Data area | ATLAS `/Volumes/MESAIL` (NFS) | the ext4 data disk on HANGAR | tests never use ATLAS |

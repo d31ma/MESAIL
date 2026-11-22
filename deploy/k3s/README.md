@@ -41,15 +41,26 @@ the whole dev host is blocked. `install-node.sh` stops when it finds the unit en
 ## Order
 
 1. `scripts/k3s/stage-node-files.sh`: copies the K3s files and `flux-install.yaml` from kestrel's cache and checks every SHA-256.
-2. `scripts/k3s/install-node.sh`: installs K3s, Zot and Flux in the running dev host.
+2. `scripts/k3s/install-node.sh`: installs K3s, Zot and Flux's controllers (no source) in the running dev host.
 3. `scripts/k3s/node-check.sh --probe-image <image with fylo>`: K3s ready, Zot answers, a test image pushed with skopeo and pulled by digest, the FYLO root probe, Flux, and memory and disk numbers.
+
+## What lives here and what lives in PaaS
+
+This folder is the node layer only: K3s in the dev host, `registries.yaml`, the image disk's use, Zot,
+the guard and the node check. Flux's source and Mesail's app manifests for this Mac live in PaaS
+`develop` (`clusters/mesail-dev/develop`, Mesail's apps in `.../mesail/`), set up by PaaS with its own
+read-only deploy key. `install-node.sh` installs Flux's controllers with no source. Never add a
+GitRepository for `d31ma/MESAIL` or a deploy key here.
 
 ## Localhost only (the owner's rule for PaaS `develop`)
 
-This node is for local development on this Mac and is NEVER exposed to the internet:
-- Every Service is `ClusterIP`. No `NodePort`, no `LoadBalancer`, no Ingress to a public address, no Tailscale, no public DNS name.
-- Zot reaches the Mac only through a port-forward on the guest's loopback and the Lima forward to `127.0.0.1:15000`.
-- The K3s API and the other K3s ports answer only inside the VM (loopback and pods); the guard rejects them on `eth0`. The API is not forwarded to the Mac.
-- `node-check.sh` fails when a Service is not `ClusterIP`, when port 15000 listens on anything but `127.0.0.1`, or when the guard is missing.
+This node is for local development on this Mac and is NEVER exposed to the internet (ADR 0014 section 7):
+- Every Mac port is a Lima forward with `hostIP: 127.0.0.1`; no shared or bridged network. PaaS's
+  `tools/check_localhost_only.py --live` checks it.
+- No `LoadBalancer`, external IPs, public Ingress, Tailscale or public DNS. A NodePort stays inside the VM:
+  the guard rejects the K3s ports (API 6443, kubelet, kube-proxy, NodePorts, flannel) on `eth0`.
+- Zot is `ClusterIP`, reached through a port-forward on the guest's loopback and the Lima forward to `127.0.0.1:15000`.
+- `node-check.sh` fails on a `LoadBalancer` or external-IP Service, on port 15000 listening anywhere but
+  `127.0.0.1`, or when the guard is missing.
 
 Use the cluster only through `mesail-devhost exec sudo k3s kubectl ...`. The K3s API is not forwarded to the Mac.

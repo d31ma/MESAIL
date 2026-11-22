@@ -16,8 +16,7 @@
     "images": {
       "source-controller": "ghcr.io/fluxcd/source-controller@sha256:611b6bca3eae95bcff471414d1fb14a4ab83d7f14e609cccef2bd389c121f37e",
       "kustomize-controller": "ghcr.io/fluxcd/kustomize-controller@sha256:37db29b25dae35b881a5e064acedb0cc954442da453a39eaa0eab7a90dbecc4e"
-    },
-    "deploy_key_title": "mesail-k3s-falcos-mini-2 flux read-only"
+    }
   },
   "registry": {
     "version": "v2.1.23",

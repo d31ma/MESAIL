@@ -97,14 +97,14 @@ check_fylo_root() {
 }
 
 public_services() {
-  kubectl_guest get services --all-namespaces -o 'jsonpath={range .items[?(@.spec.type!="ClusterIP")]}{.metadata.namespace}/{.metadata.name} {.spec.type}{"\n"}{end}'
+  kubectl_guest get services --all-namespaces -o 'jsonpath={range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}/{.metadata.name} LoadBalancer{"\n"}{end}{range .items[?(@.spec.externalIPs)]}{.metadata.namespace}/{.metadata.name} externalIPs{"\n"}{end}'
 }
 
 check_localhost_only() {
   local services listeners
   services=$(public_services)
   listeners=$(lsof -nP -iTCP:"$(pin registry.host_port)" -sTCP:LISTEN | awk 'NR>1 {print $9}' | sort -u)
-  echo "Services that are not ClusterIP: ${services:-none}"
+  echo "LoadBalancer or external-IP Services: ${services:-none}"
   echo "Mac listeners on port $(pin registry.host_port): ${listeners:-none}"
   guest sudo nft list chain inet mesail_service_cidr_guard input > /dev/null
   [ -z "$services" ] && [ "$listeners" = "127.0.0.1:$(pin registry.host_port)" ]
@@ -112,7 +112,7 @@ check_localhost_only() {
 
 check_flux() {
   kubectl_guest -n flux-system wait --for=condition=Available deployment/source-controller deployment/kustomize-controller --timeout=60s
-  kubectl_guest -n flux-system get gitrepositories,kustomizations 2>&1 || true
+  kubectl_guest get gitrepositories,kustomizations --all-namespaces 2>&1 || true
 }
 
 k3s_disk_percent() {
