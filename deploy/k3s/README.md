@@ -76,3 +76,11 @@ MAC_HEAVY_COORDINATOR=mesail-docker mac-heavy --owner msl-k41-probe -- docker --
 ```
 
 Then run `scripts/k3s/node-check.sh --probe-image mesail/node-check-probe:local`.
+
+## First run on this Mac (2026-11-21, MSL-K41)
+
+`install-node.sh` 22:00-22:02, `node-check.sh` 22:02-22:02: all steps passed. K3s v1.37.2+k3s1 node `mesail` Ready;
+Zot answered on `127.0.0.1:15000`; a probe image pushed with skopeo and pulled by digest; the FYLO probe wrote and a
+second pod read the root `/mnt/data/nodecheck` (FYLO 26.45.07 puts its root-owner lock files in `/mnt/data`, the
+mount point, beside the root); Flux's controllers ran with no source. After: guest memory 1.4 of 7.7 GiB used, K3s
+disk 2.4 of 25 GiB (10%), HANGAR 38 GiB free. Floci stayed healthy.

@@ -1,7 +1,7 @@
 [Unit]
 Description=Zot on the guest loopback for the Lima forward (MESAIL deploy/k3s/node, as the pilot's Headlamp forward)
 After=k3s.service
-Requires=k3s.service
+PartOf=k3s.service
 
 [Service]
 ExecStart=/usr/local/bin/k3s kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml -n registry port-forward --address 127.0.0.1 service/zot 30500:5000

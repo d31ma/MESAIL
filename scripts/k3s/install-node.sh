@@ -24,7 +24,7 @@ guest() {
 
 pin() {
   python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1]))
-for k in sys.argv[2].split("."): d=d[k]
+for k in sys.argv[2].split("/" if "/" in sys.argv[2] else "."): d=d[k]
 print(d)' "$(install_root)/deploy/k3s/node/pins.json" "$1"
 }
 
@@ -76,17 +76,24 @@ install_k3s_binary() {
   local node
   node="$(install_root)/deploy/k3s/node"
   put_file "$(stage_dir)/k3s-arm64" /usr/local/bin/k3s 0755
-  guest_sha_matches /usr/local/bin/k3s "$(pin 'k3s.files.k3s-arm64')"
+  guest_sha_matches /usr/local/bin/k3s "$(pin 'k3s/files/k3s-arm64')"
   put_file "$node/config.yaml" /etc/rancher/k3s/config.yaml 0600
   put_file "$node/registries.yaml" /etc/rancher/k3s/registries.yaml 0644
   guest sudo ln -sfn /usr/local/bin/k3s /usr/local/bin/kubectl
 }
 
+require_k3s_bind() {
+  local bind
+  bind=$(guest findmnt -n -v -o SOURCE,FSROOT,UUID /var/lib/rancher/k3s | tr -s ' ')
+  echo "K3s bind: ${bind:-none}"
+  [ "$bind" = "$(pin disks.images_bind)" ]
+}
+
 install_airgap_images() {
   local target=/var/lib/rancher/k3s/agent/images/k3s-airgap-images-arm64.tar.zst
-  guest mountpoint -q /var/lib/rancher/k3s
+  require_k3s_bind
   put_file "$(stage_dir)/k3s-airgap-images-arm64.tar.zst" "$target" 0644
-  guest_sha_matches "$target" "$(pin 'k3s.files.k3s-airgap-images-arm64.tar.zst')"
+  guest_sha_matches "$target" "$(pin 'k3s/files/k3s-airgap-images-arm64.tar.zst')"
 }
 
 k3s_not_enabled() {
@@ -95,6 +102,7 @@ k3s_not_enabled() {
 
 start_k3s() {
   k3s_not_enabled || { echo "install-node: k3s.service is enabled at boot; the dev host supervisor must start it" >&2; return 1; }
+  require_k3s_bind
   guest sudo systemctl start k3s.service
   guest sudo k3s kubectl wait --for=condition=Ready "node/$(pin node_name)" --timeout=300s
 }
