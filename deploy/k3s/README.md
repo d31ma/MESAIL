@@ -21,7 +21,7 @@ The decision and every difference from kestrel are in
 
 | Guest path | Disk | Holds |
 | --- | --- | --- |
-| `/mnt/mesail-k3s` | the image disk on HANGAR (`/Volumes/HANGAR/mesail/k3s/mesail-k3s-images.raw`, 30 GiB cap, mounted by UUID); the dev host supervisor binds `/var/lib/rancher/k3s` onto `/mnt/mesail-k3s/rancher/k3s` | K3s state and images, `registry/` (Zot) |
+| `/mnt/mesail-k3s` | the image disk on HANGAR (`/Volumes/HANGAR/mesail/k3s/mesail-k3s-images.raw`, made at 25 GiB, UUID `413960ab-a6f0-40f0-9184-6cf725f54b5d`, guest `/dev/vdc`; Platform allows up to 30 GiB, so it is grown before it passes 85%); the dev host supervisor binds `/var/lib/rancher/k3s` onto `/mnt/mesail-k3s/rancher/k3s` | K3s state and images, `registry/` (Zot) |
 | `/mnt/mesail-data` | the existing data disk on HANGAR | `local-path/`, `apps/<app>.vol/<app>` (FYLO roots), Floci's Docker volumes until K45 |
 
 ## K3s never starts at boot
