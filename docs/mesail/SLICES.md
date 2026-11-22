@@ -3674,8 +3674,9 @@ Release blockers:
   fix goes into FYLO develop and DB-3. Mesail production uses a FYLO with
   this fix (DB-3 or later); no Mesail code change. The restore drill
   (K31) runs on that FYLO.
-- **Write speed on ATLAS:** OPERATIONS.md section 7.6's measurement; K38
-  (one FYLO transaction per user action) becomes a blocker if it fails.
+- **Write speed on ATLAS:** OPERATIONS.md section 7.6's measurement; if
+  it fails it is a go-live blocker for FYLO (FYLO-TXN3) and the hub. K38
+  does not fix speed: it makes each action all or nothing.
 - **K36:** done (develop 3d83a264): a hand-off to an unknown mailbox in
   another hosted domain is reported `bounced`, not `sent`.
 - **K34:** done (develop 9f5f6bb4): mail out to an outside address is

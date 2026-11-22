@@ -450,11 +450,15 @@ If a check fails, Platform puts back the data kept before the restore.
   hub before this check): on the production host, measure the commit p50 and
   p95 and run a 10-person load (sends, mark-reads, email in and out). If a
   plain chat send's p95 is over 3 s, or a root is over 70% of its commit
-  rate at peak, or a read's p95 while events apply is over 5 s, SLICES K38
-  (one FYLO transaction per user action; the user's "Yes, several (Rec.)"
-  on transactions across collections) is done before go-live. With K38 a
-  plain send is 2 commits and every burst 1. K37 (at most 25 writes per
-  call) is done in any case.
+  rate at peak, or a read's p95 while events apply is over 5 s, it is a
+  go-live blocker: report the numbers to the MESAIL Build Coordinator, the
+  FYLO Build Coordinator and the hub. SLICES K38 (one FYLO transaction per
+  user action) does NOT fix it: FYLO-TXN2 measured one transaction over
+  several collections at about the cost of the same number of separate
+  commits, so K38 is for all-or-nothing writes, not speed. The speed fix
+  comes from FYLO (its backlog FYLO-TXN3, faster transactions) or a
+  smaller write count per action. K37 (at most 25 writes per call) is done
+  in any case.
 - The FYLO release Mesail ships with has `fylo restore-doc`, or the
   whole-collection path of 7.4 is accepted for one-document restores
   (through the hub).
