@@ -3514,10 +3514,27 @@ MESAIL Build Coordinator's notes) are replaced.
   | Devicebox put / acknowledge | body, slip with its outbox entry, box counts / slips, bodies, box counts | up to 11 / 21 -> 1 each |
   | mail-out deliver, per item | the claim (before the SMTP call); then the attempt and the outcome | 4 -> 2 |
   | Directory: add or remove a member | after the Keycloak step: people, members (with its outbox entry), addresses | 3 -> 1 |
-  On ANVIL after FYLO-PERF1 a single commit is about 30 ms and a 25-write
-  batch about 243 ms (`~/Library/Logs/local/FYLO/measurements/txn-cost-20261121.md`),
-  so a plain send is about 0.06 s and every burst about one commit. The
-  ATLAS number comes from OPERATIONS.md section 7.6, with the user's yes.
+  The "Commits" column counts all-or-nothing units, NOT time. FYLO-TXN2
+  measured (2026-11-21, `/Volumes/ANVIL/Logs/FYLO/txn2/bench-summary.md`,
+  release build, 25 writes of about 230 bytes): ONE transaction over 7
+  collections costs about the same as 7 separate commits (internal disk
+  p50 12-15 ms against 12 ms; ANVIL NFSv3 130-179 ms against 157 ms);
+  only 25 writes in ONE collection are cheaper (5.5-7 ms internal). So
+  K38 is for correctness (no half-saved action, no drifted count, the
+  repair work below dropped), not for speed: a chat send costs about what
+  its 7 commits cost today. Faster multi-collection transactions are
+  FYLO's backlog FYLO-TXN3, after the release. The ATLAS number comes from
+  OPERATIONS.md section 7.6, with the user's yes.
+- **After a power cut:** until a writer opens the root, a reader of an
+  affected collection gets `EENGINE_NAMESPACE_UNSETTLED` (retryable); any
+  write or `fylo recover` settles it. Mesail answers it like any store
+  error that wrote nothing (a retryable `503`, or the event is
+  redelivered), and K38's crash test checks that a reader recovers.
+- **FYLO's order:** FYLO-TXN2 ships first inside FYLO (ADR 0013
+  Amendment 3, accepted), then the machine protocol (`storeTransaction`
+  with a per-write `collection`, begin and commit over several
+  collections) as its step 2, after L1-3b lands. TACHYON's call follows
+  that, so K38 waits for both.
 - **Repair work dropped** (it existed only because FYLO had no
   cross-collection transaction):
   - the ordering rule of the per-collection plan (helpers first, the
@@ -3534,7 +3551,8 @@ MESAIL Build Coordinator's notes) are replaced.
   the 60 s function limit and long SMTP hand-offs). D2's removal jobs keep
   their batches of at most 25 writes, each batch one transaction. K31's
   runbook does not change. K30 and K40 do not change.
-- **Done when:** the write-cost tests show the commits in the table; a
+- **Done when:** the write-cost tests show the commits (all-or-nothing
+  units) in the table; a
   crash test in the middle of each action leaves either all of it or none
   of it (no half-saved state, no drifted count); the K33 flow tests pass;
   and OPERATIONS.md 7.6's measurement passes.
