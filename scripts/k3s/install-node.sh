@@ -82,11 +82,30 @@ install_k3s_binary() {
   guest sudo ln -sfn /usr/local/bin/k3s /usr/local/bin/kubectl
 }
 
+bind_targets() {
+  python3 -I -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["binds"]))' "$(install_root)/deploy/k3s/node/pins.json"
+}
+
+bind_root() {
+  python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["binds"][sys.argv[2]])' "$(install_root)/deploy/k3s/node/pins.json" "$1"
+}
+
+expected_bind() {
+  printf '%s %s %s' "$(pin disks.images_device)" "$(bind_root "$1")" "$(pin disks.images_uuid)"
+}
+
+require_one_bind() {
+  local target="$1" bind
+  bind=$(guest findmnt -n -v -o SOURCE,FSROOT,UUID "$target" | tr -s ' ')
+  echo "K3s bind $target: ${bind:-none}"
+  [ "$bind" = "$(expected_bind "$target")" ]
+}
+
 require_k3s_bind() {
-  local bind
-  bind=$(guest findmnt -n -v -o SOURCE,FSROOT,UUID /var/lib/rancher/k3s | tr -s ' ')
-  echo "K3s bind: ${bind:-none}"
-  [ "$bind" = "$(pin disks.images_bind)" ]
+  local target
+  for target in $(bind_targets); do
+    require_one_bind "$target"
+  done
 }
 
 install_airgap_images() {
@@ -105,6 +124,7 @@ start_k3s() {
   require_k3s_bind
   guest sudo systemctl start k3s.service
   guest sudo k3s kubectl wait --for=condition=Ready "node/$(pin node_name)" --timeout=300s
+  guest sudo k3s kubectl uncordon "$(pin node_name)"
 }
 
 zot_auth_file() {

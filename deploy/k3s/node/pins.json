@@ -30,6 +30,12 @@
     "images": "/mnt/mesail-k3s",
     "data": "/mnt/mesail-data",
     "app_area": "/mnt/mesail-data/apps",
-    "images_bind": "/dev/vdc /rancher/k3s 413960ab-a6f0-40f0-9184-6cf725f54b5d"
+    "images_uuid": "413960ab-a6f0-40f0-9184-6cf725f54b5d",
+    "images_device": "/dev/vdc"
+  },
+  "binds": {
+    "/var/lib/rancher/k3s": "/rancher/k3s",
+    "/var/lib/kubelet": "/kubelet",
+    "/var/log/pods": "/pod-logs"
   }
 }

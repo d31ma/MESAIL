@@ -37,11 +37,18 @@ kubectl_guest() {
   guest sudo k3s kubectl "$@"
 }
 
+node_schedulable() {
+  local cordoned
+  cordoned=$(kubectl_guest get node "$(pin node_name)" -o 'jsonpath={.spec.unschedulable}')
+  echo "node cordoned: ${cordoned:-false}"
+  [ "$cordoned" != true ]
+}
+
 check_node_ready() {
   local status
   status=$(kubectl_guest get node "$(pin node_name)" -o 'jsonpath={.status.conditions[?(@.type=="Ready")].status}')
   echo "node $(pin node_name) Ready=$status, K3s $(guest k3s --version | head -1)"
-  [ "$status" = True ]
+  [ "$status" = True ] && node_schedulable
 }
 
 check_registry_answers() {

@@ -21,7 +21,7 @@ The decision and every difference from kestrel are in
 
 | Guest path | Disk | Holds |
 | --- | --- | --- |
-| `/mnt/mesail-k3s` | the image disk on HANGAR (`/Volumes/HANGAR/mesail/k3s/mesail-k3s-images.raw`, made at 25 GiB, UUID `413960ab-a6f0-40f0-9184-6cf725f54b5d`, guest `/dev/vdc`; Platform allows up to 30 GiB, so it is grown before it passes 85%); the dev host supervisor binds `/var/lib/rancher/k3s` onto `/mnt/mesail-k3s/rancher/k3s` | K3s state and images, `registry/` (Zot) |
+| `/mnt/mesail-k3s` | the image disk on HANGAR (`/Volumes/HANGAR/mesail/k3s/mesail-k3s-images.raw`, made at 25 GiB, UUID `413960ab-a6f0-40f0-9184-6cf725f54b5d`, guest `/dev/vdc`; Platform allows up to 30 GiB, so it is grown before it passes 85%); the dev host supervisor binds `/var/lib/rancher/k3s` onto `rancher/k3s`, `/var/lib/kubelet` onto `kubelet` and `/var/log/pods` onto `pod-logs` | K3s state, images and containerd, kubelet pod volumes, container logs, `registry/` (Zot) |
 | `/mnt/mesail-data` | the existing data disk on HANGAR | `local-path/`, `apps/<app>.vol/<app>` (FYLO roots), Floci's Docker volumes until K45 |
 
 ## K3s never starts at boot
@@ -32,11 +32,22 @@ is mounted and `/var/lib/rancher/k3s` is bound onto it. If K3s started at boot, 
 write to the VM's own disk; the next bind is then refused (the folder is not empty) and
 the whole dev host is blocked. `install-node.sh` stops when it finds the unit enabled.
 
-To stop K3s, run only `sudo systemctl stop k3s.service` (and `zot-forward.service`). Never run `k3s-killall.sh` or
-`k3s-uninstall.sh` on the dev host: they unmount what is mounted below `/var/lib/rancher/k3s`, which is the bind of the
-K3s disk, so the next start would write to the VM's own disk and the next mount would block the host.
-`install-node.sh` copies only the `k3s` binary, so these scripts are not installed. Pod processes keep running after
-`systemctl stop`; a VM stop ends them.
+### Stopping K3s (the dev host supervisor's stop, and every hand-over)
+
+K3s's unit has `KillMode=process`, so pods and their `containerd-shim-runc-v2` processes keep running after
+`systemctl stop k3s.service` and keep files open on the K3s disk. Stop in this order:
+
+1. `sudo k3s kubectl drain mesail --ignore-daemonsets --delete-emptydir-data --grace-period=35 --timeout=120s`
+   (each pod gets its own grace period; nothing restarts while the node is cordoned).
+2. `sudo systemctl stop zot-forward.service k3s.service`.
+3. Leftover `containerd-shim-runc-v2` processes of `/var/lib/rancher/k3s/data`: TERM, then KILL after 10 s, each pid logged.
+4. Unmount only the mounts below the three binds, deepest first.
+5. `fuser -vm /mnt/mesail-k3s`: if anything is open, log it and do not stop the VM; otherwise unmount the binds,
+   then the disk, then stop Docker and the VM.
+
+After each start: `sudo k3s kubectl uncordon mesail` (the supervisor does it; `install-node.sh` too).
+Never run `k3s-killall.sh` or `k3s-uninstall.sh`: they unmount and remove the bind itself. `install-node.sh` copies
+only the `k3s` binary, so they are not installed.
 
 ## What the dev host session sets up first
 
