@@ -3447,6 +3447,11 @@ plans (TAC-FY2's one-collection call, `k38-tachyon-transactions.md` in the
 MESAIL Build Coordinator's notes) are replaced.
 - **Blocked until** FYLO's release with cross-collection transactions and
   TACHYON's data source call for them are in the releases Mesail pins.
+  FYLO builds it as FYLO-TXN2, after its L1-3b and SDK-3 (DB-2); FYLO's
+  handshake reports it with a flag, and Mesail's transaction helper
+  refuses to start (a clear error, not a silent fallback) when the flag is
+  missing. Same namespace only: a transaction never spans two roots or two
+  namespaces.
   The exact call shape and limits (most writes and bytes, most
   collections, time limit, errors) come from the FYLO and TACHYON Build
   Coordinators; use those, never a guess. Today's one-collection limits
