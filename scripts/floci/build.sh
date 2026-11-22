@@ -61,7 +61,7 @@ trace_check() {
 }
 
 prune_step() {
-  if [ "${MESAIL_NO_PRUNE:-0}" = 1 ]; then echo "image prune skipped (MESAIL_NO_PRUNE=1)"; return 0; fi
+  if [ "${MESAIL_PRUNE:-0}" != 1 ]; then echo "image prune skipped (the dev host is shared; MESAIL_PRUNE=1 turns it on)"; return 0; fi
   mesail_step prune-images docker image prune --force --filter label=org.mesail.stack=dev
 }
 

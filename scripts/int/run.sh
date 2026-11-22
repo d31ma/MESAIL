@@ -356,7 +356,7 @@ use_slow_tests() {
 floci_settings() {
   MESAIL_IMAGE_TAG="$(image_tag)"
   export MESAIL_INT_KEEP_STACK="$KEEP_STACK"
-  export MESAIL_OWNER=msl-int MESAIL_LOG_DIR="$RUN_LOGS/floci" MESAIL_IMAGE_TAG MESAIL_NO_PRUNE=1
+  export MESAIL_OWNER=msl-int MESAIL_LOG_DIR="$RUN_LOGS/floci" MESAIL_IMAGE_TAG
   if [ -n "${FLOCI_TESTS:-}" ]; then export MESAIL_TEST_RUN="$FLOCI_TESTS"; fi
   GOFLAGS="${GOFLAGS:+$GOFLAGS }-timeout=$(blackbox_timeout)"
   export GOFLAGS
