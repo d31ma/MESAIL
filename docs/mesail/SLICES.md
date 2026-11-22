@@ -3762,9 +3762,14 @@ the same `FYLO_LEASE_HEARTBEAT_SECONDS` and `FYLO_LEASE_TAKEOVER_SECONDS`
 in every pod; FYLO at or after slice L1-3b, which adds the fencing
 check before every commit-log append and rewrites the lease record in
 place, read with a fresh open each check, so NFS attribute caching no
-longer delays a takeover (`actimeo=3` becomes optional once FYLO's
-two-machine NFS bench passes; until then mount the FYLO volumes with
-`actimeo=3`); measure the takeover from a pod before go-live. Each
+longer delays a takeover. FYLO's bench with its defaults (5 s heartbeat,
+20 s takeover) and default NFS mount options: a live owner on another
+machine was never taken over in 60 s, and a killed owner was taken over
+after 20.5 s, so `actimeo=3` is optional. That was a macOS NFSv3 client
+only; K3s pods use a Linux NFS client, which FYLO benches with Platform
+before L1-5's go-live. Until that Linux bench passes, mount the FYLO
+volumes with `actimeo=3`; measure the takeover from a pod before
+go-live. Each
 kestrel and CITADEL change needs the user's yes. Done when the kestrel
 overlay deploys to kestrel's cluster and the blackbox suite passes there.
 
