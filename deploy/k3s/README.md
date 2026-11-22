@@ -64,3 +64,15 @@ This node is for local development on this Mac and is NEVER exposed to the inter
   `127.0.0.1`, or when the guard is missing.
 
 Use the cluster only through `mesail-devhost exec sudo k3s kubectl ...`. The K3s API is not forwarded to the Mac.
+
+## The FYLO probe image
+
+The node check needs an image with `fylo`. Build the Dockerfile's `lambda-tools` stage (Ubuntu with the pinned
+`ty` and `fylo`) on the dev host's Docker, in the mesail-docker root:
+
+```bash
+eval "$(mesail-devhost env)"
+MAC_HEAVY_COORDINATOR=mesail-docker mac-heavy --owner msl-k41-probe -- docker --context default buildx build --builder default --load --platform linux/arm64 --provenance=false --target lambda-tools --tag mesail/node-check-probe:local .
+```
+
+Then run `scripts/k3s/node-check.sh --probe-image mesail/node-check-probe:local`.

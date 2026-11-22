@@ -93,6 +93,8 @@ spec:
             - /bin/bash
             - /opt/probe/probe.sh
           env:
+            - name: HOME
+              value: /tmp
             - name: PROBE_MODE
               value: PROBE_MODE
             - name: PROBE_MARKER
