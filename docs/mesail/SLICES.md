@@ -3452,6 +3452,34 @@ MESAIL Build Coordinator's notes) are replaced.
   refuses to start (a clear error, not a silent fallback) when the flag is
   missing. Same namespace only: a transaction never spans two roots or two
   namespaces.
+- **Call shape and limits** (FYLO BC, TACHYON BC and TAC-FY2, 2026-11-21;
+  check against the releases): TACHYON's `DataSource.Command` with
+  `{"operation":"transaction","action":"begin"}`, writes with
+  `"transaction":<id>` (and, from FYLO-TXN2, an optional `"collection"`
+  per write), then `commit`, with a deferred `rollback`; the handshake
+  flag is `capabilities.store.multiCollectionTransactions`. Over the whole
+  transaction: at most 1,000 writes and 8 MiB (`ETXNLIMIT`); at most 64
+  fields per document and 1 MiB per FYLO request (TACHYON). Time: the
+  smaller of 10 s from `begin` and the answer's remaining store budget
+  (the datasource `timeout`, 5 s by default), so begin, the writes and
+  commit share that budget. At most 4 open transactions per ty server
+  (never reached: one call at a time per function). Another namespace
+  answers `ETXNSCOPE`; raw-file or segments-layout collections `ETXNLAYOUT`
+  (Mesail uses neither). `createCollection` and `dropCollection` stay
+  outside: create a new monthly collection before `begin`. Until
+  TAC-YON-ERRCODE gives Go stable error codes, any error means "nothing
+  was written": the action answers as today (a retryable `503`, or the
+  event is redelivered). Ships in FYLO's DB-3, the coordinated release;
+  FYLO sends a develop build earlier for MSL-INT.
+- **Write order and readers:** FYLO gives no read snapshot across
+  collections; collections become stable in the order of their first
+  write, and readers of a collection that is still being written wait.
+  So each transaction writes data first and pointers last (the message,
+  then its change rows, then the change head; the slip and body, then the
+  box counts). A reader that follows a pointer and finds the target
+  missing treats it as "not found yet" and retries once after a short
+  wait. In Lambda form this never happens inside a root (one call at a
+  time per function); it matters for `realtime` and native runs.
   The exact call shape and limits (most writes and bytes, most
   collections, time limit, errors) come from the FYLO and TACHYON Build
   Coordinators; use those, never a guess. Today's one-collection limits
