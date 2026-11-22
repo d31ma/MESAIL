@@ -3445,6 +3445,12 @@ action becomes one commit in its app's root, and Mesail drops the repair
 work it needed for half-saved actions (below). Earlier per-collection
 plans (TAC-FY2's one-collection call, `k38-tachyon-transactions.md` in the
 MESAIL Build Coordinator's notes) are replaced.
+- **Not a go-live blocker** (the MESAIL Build Coordinator's decision,
+  2026-11-21): today's code already keeps half-saved actions safe with
+  its ordering and repair rules, which stay until K38's code replaces
+  them, so go-live is correct without K38. K38 brings simpler code and
+  no drifted counts, not speed. It may land before go-live if FYLO-TXN2
+  and TACHYON's call arrive in time, but nothing waits for it.
 - **Blocked until** FYLO's release with cross-collection transactions and
   TACHYON's data source call for them are in the releases Mesail pins.
   FYLO builds it as FYLO-TXN2, after its L1-3b and SDK-3 (DB-2); FYLO's
