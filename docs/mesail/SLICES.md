@@ -3463,7 +3463,10 @@ MESAIL Build Coordinator's notes) are replaced.
   smaller of 10 s from `begin` and the answer's remaining store budget
   (the datasource `timeout`, 5 s by default), so begin, the writes and
   commit share that budget. At most 4 open transactions per ty server
-  (never reached: one call at a time per function). Another namespace
+  (never reached: one call at a time per function). In a `ty test` unit
+  (with TAC-ST2) each store call gets its own 5 s, and FYLO's transaction
+  gets about 5 s from its first write, so K38's tests keep each
+  transaction short. Another namespace
   answers `ETXNSCOPE`; raw-file or segments-layout collections `ETXNLAYOUT`
   (Mesail uses neither). `createCollection` and `dropCollection` stay
   outside: create a new monthly collection before `begin`. Until
