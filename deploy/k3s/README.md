@@ -14,7 +14,7 @@ The decision and every difference from kestrel are in
 | `node/zot-forward.service` | `kubectl port-forward --address 127.0.0.1 service/zot 30500:5000`, as the pilot's Headlamp forward |
 | `node/k3s.service` | the pilot's unit, with a mount check for each disk; installed but never enabled at boot |
 | `node/service-cidr-guard.*` | the pilot's nftables guard for `10.43.0.0/16`, plus an input rule that rejects the K3s ports (API 6443, kubelet, kube-proxy, NodePorts, flannel) arriving on the VM's network interface `eth0` |
-| `registry/` | Zot as the pilot's `registry.json`, keeping the last 2 digests per image |
+| `registry/` | Zot as the pilot's `registry.json`, keeping the last 2 digests per image; `pusher` (Mesail) may push anywhere except `paas-develop/**`, and `paas-pusher` (PaaS `develop`) only to `paas-develop/**` |
 | `node-check/` | the FYLO probe: a pod mounts `apps/nodecheck.vol` by subPath at `/mnt/data` and writes and reads the root `/mnt/data/nodecheck` |
 
 ## Disks in the dev host
@@ -90,3 +90,14 @@ Zot answered on `127.0.0.1:15000`; a probe image pushed with skopeo and pulled b
 second pod read the root `/mnt/data/nodecheck` (FYLO 26.45.07 puts its root-owner lock files in `/mnt/data`, the
 mount point, beside the root); Flux's controllers ran with no source. After: guest memory 1.4 of 7.7 GiB used, K3s
 disk 2.4 of 25 GiB (10%), HANGAR 38 GiB free. Floci stayed healthy.
+
+## Push users
+
+| User | May push to | Password |
+| --- | --- | --- |
+| `pusher` | every repository except `paas-develop/**` (Mesail's images, `mesail/**`) | Secret `registry/zot-pusher` |
+| `paas-pusher` | `paas-develop/**` only (PaaS `develop`) | Secret `registry/paas-pusher` |
+
+Passwords are made once inside the cluster and never printed, logged or committed. To push, read the
+password from its Secret into a 0600 auth file and delete the file after use. `install-node.sh install_paas_pusher`
+adds `paas-pusher`; `scripts/k3s/zot-scope-check.sh` proves each user's scope (it pushes the probe image).

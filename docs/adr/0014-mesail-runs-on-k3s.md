@@ -144,7 +144,9 @@ whose checksum differs stops the install.
   read-only root, no service-account token, one copy with Recreate,
   a `ClusterIP` Service (kestrel: NodePort 30500), dedupe, garbage collection (delay 1 h, every 24 h), a
   daily scrub. Anyone in the cluster may pull; only the user `pusher` may
-  push; nobody may delete. The push password is made once inside the
+  push; nobody may delete. On this Mac a second push user, `paas-pusher`,
+  may push only to `paas-develop/**` (PaaS `develop`'s images, PAAS-4a); its
+  password lives only in Secret `registry/paas-pusher`. The push password is made once inside the
   cluster, kept in a Secret and a 0600 auth file outside the repository,
   and never printed.
 - **Reach:** a `kubectl port-forward --address 127.0.0.1 service/zot

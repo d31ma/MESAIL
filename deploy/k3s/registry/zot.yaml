@@ -94,6 +94,15 @@ data:
                   "actions": ["read", "create", "update"]
                 }
               ]
+            },
+            "paas-develop/**": {
+              "anonymousPolicy": ["read"],
+              "policies": [
+                {
+                  "users": ["paas-pusher"],
+                  "actions": ["read", "create", "update"]
+                }
+              ]
             }
           }
         }

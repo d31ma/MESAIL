@@ -145,6 +145,35 @@ install_registry() {
   guest sudo systemctl restart zot-forward.service
 }
 
+paas_pusher_secret_exists() {
+  guest sudo k3s kubectl -n registry get secret paas-pusher > /dev/null 2>&1
+}
+
+create_paas_pusher_secret() {
+  openssl rand -hex 24 | tr -d '\n' | guest sudo k3s kubectl -n registry create secret generic paas-pusher --from-file=password=/dev/stdin
+}
+
+paas_pusher_login_exists() {
+  guest sudo k3s kubectl -n registry get secret zot-htpasswd -o 'jsonpath={.data.htpasswd}' | base64 --decode | grep -q '^paas-pusher:'
+}
+
+add_paas_pusher_login() {
+  guest sudo bash -s < "$(install_root)/scripts/k3s/add-paas-pusher-login.sh"
+}
+
+install_paas_pusher() {
+  if ! paas_pusher_secret_exists; then
+    create_paas_pusher_secret
+  fi
+  if ! paas_pusher_login_exists; then
+    add_paas_pusher_login
+  fi
+  guest sudo k3s kubectl apply -f - < "$(install_root)/deploy/k3s/registry/zot.yaml"
+  guest sudo k3s kubectl -n registry rollout restart deployment/zot
+  guest sudo k3s kubectl -n registry rollout status deployment/zot --timeout=300s
+  echo "paas-pusher: password only in Secret registry/paas-pusher (not printed); may push to paas-develop/** only"
+}
+
 install_flux() {
   local pinned
   pinned=$(python3 -I "$(install_root)/scripts/k3s/flux_pinner.py" "$(install_root)/deploy/k3s/node/pins.json" "$(stage_dir)/flux-install.yaml")
@@ -160,6 +189,7 @@ run_all() {
   step airgap-images install_airgap_images
   step k3s-start start_k3s
   step registry install_registry
+  step paas-pusher install_paas_pusher
   step flux install_flux
   echo "install-node: done; run scripts/k3s/node-check.sh"
 }
