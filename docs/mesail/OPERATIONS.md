@@ -445,7 +445,9 @@ If a check fails, Platform puts back the data kept before the restore.
 - K33's flow tests pass, and K34 proves mail out to an outside address
   (SLICES K33 and K34).
 - Write speed on the ATLAS folders (FYLO-L1-3 measured a commit at about
-  228 ms, p95 377 ms): on the production host, measure the commit p50 and
+  228 ms, p95 377 ms, before FYLO-PERF1; no new measurement on ATLAS
+  without the user's yes, because ATLAS is production, so ask through the
+  hub before this check): on the production host, measure the commit p50 and
   p95 and run a 10-person load (sends, mark-reads, email in and out). If a
   plain chat send's p95 is over 3 s, or a root is over 70% of its commit
   rate at peak, or a read's p95 while events apply is over 5 s, SLICES K38

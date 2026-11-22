@@ -3483,10 +3483,12 @@ Coordinator's notes).
   transactions across collections come back as a question. Until that
   table, no collection redesign. PERF1's first number (2026-11-21, on
   ANVIL's network disk, the sidecar store): a batch of 25 writes went from
-  about 1,700 ms to 243 ms. Whether that batch is 25 single commits or one
-  transaction is asked of FYLO: if single commits, a plain send is about
-  0.1 s and K38 becomes an optimisation; if one transaction, K38 keeps its
-  value. The ATLAS number (OPERATIONS.md 7.6) still decides. K37's cap (25
+  about 1,700 ms to 243 ms. FYLO's answer: that is ONE batch (one storage
+  commit); a single save there is now about 30 ms, so 25 separate saves
+  are about 750 ms (`~/Library/Logs/local/FYLO/measurements/txn-cost-20261121.md`).
+  So on ANVIL a plain send is about 0.2 s, and a 26-write burst about
+  0.8 s, or about 0.3-0.4 s with K38: K38 still saves about two-thirds on
+  the bursts. The ATLAS number (OPERATIONS.md 7.6) still decides. K37's cap (25
   writes or 20 s per call) does not change either way: it guards the 60 s
   function timeout and long SMTP hand-offs, not speed.
 - **Across collections:** the user decided "Decide after measuring
