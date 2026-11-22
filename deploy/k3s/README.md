@@ -32,6 +32,12 @@ is mounted and `/var/lib/rancher/k3s` is bound onto it. If K3s started at boot, 
 write to the VM's own disk; the next bind is then refused (the folder is not empty) and
 the whole dev host is blocked. `install-node.sh` stops when it finds the unit enabled.
 
+To stop K3s, run only `sudo systemctl stop k3s.service` (and `zot-forward.service`). Never run `k3s-killall.sh` or
+`k3s-uninstall.sh` on the dev host: they unmount what is mounted below `/var/lib/rancher/k3s`, which is the bind of the
+K3s disk, so the next start would write to the VM's own disk and the next mount would block the host.
+`install-node.sh` copies only the `k3s` binary, so these scripts are not installed. Pod processes keep running after
+`systemctl stop`; a VM stop ends them.
+
 ## What the dev host session sets up first
 
 - The dev host's memory from 6 to 8 GiB.
