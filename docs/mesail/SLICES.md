@@ -3679,7 +3679,8 @@ Production on kestrel still comes from PaaS `production`, through
 on kestrel; it supersedes ADR 0007 section 4 (Lambda images in Floci on
 kestrel) and ADR 0004 section 4's Lambda packaging. It keeps:
 - one writer per FYLO root: a Deployment with replicas 1, strategy
-  `Recreate`, terminationGracePeriodSeconds 30 s or more, and a clean
+  `Recreate`, terminationGracePeriodSeconds 40 (FYLO needs about 30 s
+  to close; every Deployment sets it explicitly, at most 120), and a clean
   FYLO close on SIGTERM (FYLO's 20 s lease and fencing cover a crash);
 - FYLO's root rule (a root's parent is a mount point): one folder per app,
   `<area>/<app>.vol/<app>`, mounted by subPath at `/mnt/data`, root
@@ -3727,8 +3728,14 @@ the router's proxy mode (each `/api/v1/<service>` to that app's Service),
 git), `scripts/k3s/test.sh` (the blackbox suite against the K3s
 loopback ports), and the inputs PaaS needs (apps, ports, environment, FYLO
 roots, digests). Each Mesail workload: a Deployment, replicas 1,
-`Recreate`, a ClusterIP Service, terminationGracePeriodSeconds 30; each
-FYLO app a local volume `<data disk>/k3s/<app>.vol` mounted at
+`Recreate`, a ClusterIP Service, terminationGracePeriodSeconds set
+explicitly (40 for FYLO owners, at most 120 for any), so the dev host's
+drain before a VM stop (`kubectl drain --grace-period=-1 --timeout=150s`)
+lets FYLO close cleanly. PaaS develop's static check refuses manifests
+that break its rules, so build them in from the start: no
+PodDisruptionBudget that blocks a single replica, no DaemonSets, only
+local-path PVCs on the data disk, never a hostPath into the OS disk. Each
+FYLO app a local-path volume `<data disk>/k3s/<app>.vol` mounted at
 `/mnt/data` (root `/mnt/data/<app>`); Keycloak's SQLite and the blobs on
 the data disk. Loopback ports on the Mac: Zot 15000 (Zot is a ClusterIP
 Service; K41's `kubectl port-forward --address 127.0.0.1 service/zot
