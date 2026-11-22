@@ -3483,12 +3483,17 @@ MESAIL Build Coordinator's notes) are replaced.
   missing treats it as "not found yet" and retries once after a short
   wait. In Lambda form this never happens inside a root (one call at a
   time per function); it matters for `realtime` and native runs.
-  The exact call shape and limits (most writes and bytes, most
-  collections, time limit, errors) come from the FYLO and TACHYON Build
-  Coordinators; use those, never a guess. Today's one-collection limits
-  (1,000 writes, 8 MiB, commit within one handler answer, no collection
-  create or drop inside, any error means nothing was written) are the
-  working assumption until then.
+  FYLO confirmed the order (FYLO BC, 2026-11-21): FYLO-TXN2's ADR (the
+  ADR 0013 amendment "one commit over several collections") states it,
+  and two FYLO tests guard it (a reader that follows pointers written
+  last never finds a missing target; a crash after the first applied
+  part leaves the target present and the pointer absent). The lock order
+  (by collection name) does not change it. No separate limit on the
+  number of collections (only 1,000 writes, 8 MiB and one 64 MiB log
+  record); FYLO's own limit for an open transaction is 30 s by default
+  (300 s at most), but TACHYON's 10 s bound above comes first; locks
+  are taken only at commit. About 2 more FYLO working days; FYLO sends
+  the SHA and the flag name when it lands.
 - **What stays outside a transaction:** writes in ANOTHER app's root (a
   different FYLO root) still go through the outbox and events, so the
   outbox, `events-seen` and idempotency keys stay. Plain blob files
